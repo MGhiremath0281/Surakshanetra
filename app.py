@@ -9,38 +9,50 @@ import json
 import cv2
 import numpy as np
 import traceback # Import traceback for detailed error logging
+from playsound import playsound # For playing alert sound
 
 # --- Import your feature handlers ---
-import model_handlers.agnidrishti_live as agnidrishti_live_module # Changed to module import
-from model_handlers.agnidrishti_live import AgnidrishtiCamera # Keep for direct class access
+# Ensure these modules and their classes exist and are correctly implemented
+import model_handlers.agnidrishti_live as agnidrishti_live_module
+from model_handlers.agnidrishti_live import AgnidrishtiCamera
+import model_handlers.simharekha_live as simharekha_live_module
 from model_handlers.simharekha_live import ForbiddenZoneIDS, intrusion_log_queue, get_alert_active as get_fzids_alert_active, set_alert_active as set_fzids_alert_active
-import model_handlers.vihangvetri_live as vihangvetri_live_module # Changed to module import
-from model_handlers.vihangvetri_live import VihangVetriCamera # Keep for direct class access
-# --- NEW: Import Margadarshi module directly ---
+import model_handlers.vihangvetri_live as vihangvetri_live_module
+from model_handlers.vihangvetri_live import VihangVetriCamera
 import model_handlers.margadarshi_live as margadarshi_live_module
-from model_handlers.margadarshi_live import MargadarshiCamera, DEFAULT_MARGADARSHI_CONFIG # Keep these for direct class/config access
+from model_handlers.margadarshi_live import MargadarshiCamera, DEFAULT_MARGADARSHI_CONFIG
+# --- NEW: Import Shankasoochi module directly and its camera class ---
+import model_handlers.shankasoochi_live as shankasoochi_live_module
+from model_handlers.shankasoochi_live import ShankasoochiCamera # Import the refactored class
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your_default_secret_key_change_this_in_production')
+# It's good practice to load the secret key from environment variables for production
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your_default_secret_key_change_this_in_production_12345')
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
+# Dictionary to hold active feature instances
 active_feature_instance = {
     "agnidrishti": None,
     "forbidden_zone": None,
     "vihangvetri": None,
-    "margadarshi": None # NEW: Add Margadarshi
+    "margadarshi": None,
+    "shankasoochi": None # NEW: Add Shankasoochi
 }
 
+# Locks to ensure thread-safe access to feature instances
 feature_locks = {
     "agnidrishti": threading.Lock(),
     "forbidden_zone": threading.Lock(),
     "vihangvetri": threading.Lock(),
-    "margadarshi": threading.Lock() # NEW: Add lock for Margadarshi
+    "margadarshi": threading.Lock(),
+    "shankasoochi": threading.Lock() # NEW: Add lock for Shankasoochi
 }
 
 CONFIG_FILE = 'stream_config.json'
+
+# --- Default Configurations for Features ---
 DEFAULT_AGNIDRISHTI_CONFIG = {
-    'camera_source': 0,
+    'camera_source': 0, # Default to webcam 0
     'rotation_angle': 0,
     'ir_mode': False,
     'voice_alerts_enabled': True,
@@ -48,70 +60,137 @@ DEFAULT_AGNIDRISHTI_CONFIG = {
     'detection_cooldown_seconds': 10
 }
 
-def load_agnidrishti_config():
+# Default sources for features whose configs aren't stored in stream_config.json here.
+DEFAULT_FORBIDDEN_ZONE_SOURCE = "0"
+DEFAULT_VIHANGVETRI_SOURCE = r"C:\Users\adity\Desktop\OBJDETECT\data\dronenew.mp4" # Default source for VihangVetri
+
+# Margadarshi config uses DEFAULT_MARGADARSHI_CONFIG from its own module
+
+# --- Shankasoochi Default Config ---
+# Note: model_path, screenshot_folder, alert_sound_path will be set to absolute paths on startup
+DEFAULT_SHANKASOOCHI_CONFIG = {
+    'camera_source': 0,
+    'model_path': 'yolov8x.pt', # Relative path within project, will be converted to absolute
+    'screenshot_folder': 'screenshots', # Relative path within static/, will be converted to absolute
+    'alert_sound_path': 'audio/alert.wav', # Relative path within static/, will be converted to absolute
+    'tracker': 'bytetrack.yaml',
+    'conf': 0.25, # Confidence threshold
+    'iou': 0.7, # IoU threshold for NMS
+    'agnostic_nms': False,
+    'max_assoc_dist': 150, # Max association distance for tracker
+    'holding_margin': 30, # Frames to hold track after losing detection
+    'sticky_frames': 15, # Frames to stick to a detected anomaly before alerting
+    'alert_frames': 10 # Number of consecutive frames an anomaly must be present to trigger an alert
+}
+
+def load_config():
+    """Loads configurations from file, merging with defaults and handling legacy keys."""
+    # Start with a full default config structure
+    config = {
+        'agnidrishti': DEFAULT_AGNIDRISHTI_CONFIG.copy(),
+        'shankasoochi': DEFAULT_SHANKASOOCHI_CONFIG.copy(),
+        # Add other feature configs here if they need persistent storage
+    }
+    loaded_config = {}
     try:
         if os.path.exists(CONFIG_FILE):
             with open(CONFIG_FILE, 'r') as f:
-                config = json.load(f)
-                for key, default_val in DEFAULT_AGNIDRISHTI_CONFIG.items():
-                    if key not in config:
-                        config[key] = default_val
-                config.pop('email_alerts_enabled', None)
-                config.pop('recipient_email', None)
-                config.pop('sender_email', None)
-                config.pop('sender_password', None)
-                config.pop('smtp_server', None)
-                config.pop('smtp_port', None)
-                return config
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"Warning: Could not load config file ({e}). Using default configuration for Agnidrishti.")
-    return DEFAULT_AGNIDRISHTI_CONFIG.copy()
+                loaded_config = json.load(f)
 
-def save_agnidrishti_config(config):
+        # Merge loaded config with defaults, preferring loaded values
+        for feature_name, defaults in config.items():
+            if feature_name in loaded_config:
+                # Update existing feature config with loaded values
+                defaults.update(loaded_config[feature_name])
+                # Also, remove any keys in the loaded_config that are NOT in the current defaults
+                # This handles cases where old config keys are deprecated.
+                keys_to_remove = [k for k in loaded_config[feature_name] if k not in config[feature_name]]
+                for k in keys_to_remove:
+                    defaults.pop(k, None)
+            config[feature_name] = defaults # Assign the merged config back
+
+        # Special handling for Agnidrishti legacy keys removal (if they still exist in file)
+        if 'agnidrishti' in config:
+            for legacy_key in ['email_alerts_enabled', 'recipient_email', 'sender_email',
+                               'sender_password', 'smtp_server', 'smtp_port']:
+                config['agnidrishti'].pop(legacy_key, None)
+
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Warning: Could not load config file ({e}). Using default configurations.")
+        # If there's an error, just return the default structure
+        return {
+            'agnidrishti': DEFAULT_AGNIDRISHTI_CONFIG.copy(),
+            'shankasoochi': DEFAULT_SHANKASOOCHI_CONFIG.copy(),
+        }
+    return config
+
+def save_config(config):
+    """Saves the current application configurations to a JSON file."""
     try:
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=4)
     except IOError as e:
         print(f"Error saving config file: {e}")
 
-current_agnidrishti_config = load_agnidrishti_config()
-print(f"Initial Agnidrishti Config: {current_agnidrishti_config}")
+# Load all configurations at startup
+current_app_config = load_config()
+print(f"Initial App Config: {current_app_config}")
 
-current_forbidden_zone_source = "0"
-
-current_vihangvetri_source = r"C:\Users\adity\Desktop\OBJDETECT\data\dronenew.mp4" 
-if not os.path.exists(current_vihangvetri_source):
+# Initialize non-JSON-managed config globals with their defaults
+current_forbidden_zone_source = DEFAULT_FORBIDDEN_ZONE_SOURCE
+current_vihangvetri_source = DEFAULT_VIHANGVETRI_SOURCE
+if not os.path.exists(current_vihangvetri_source) and current_vihangvetri_source != "0": # "0" is for webcam, no file check needed
     print(f"WARNING: VihangVetri default video source not found: {current_vihangvetri_source}. Defaulting to webcam (0).")
     current_vihangvetri_source = "0"
 
-# NEW: Margadarshi configuration and source
-current_margadarshi_config = DEFAULT_MARGADARSHI_CONFIG.copy()
-# You can load/save this config from a file if you want it persistent across restarts
-# For now, it will reset to defaults each time app.py starts.
-print(f"Initial Margadarshi Config: {current_margadarshi_config}")
+current_margadarshi_config = DEFAULT_MARGADARSHI_CONFIG.copy() # Margadarshi config is managed within its module for now.
 
+# Determine the absolute paths for Shankasoochi's assets
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Construct absolute paths for Shankasoochi assets, ensuring they are placed in 'static' for web access
+# The model path is typically relative to the model_handlers, so include that in the absolute path
+SHANKASOOCHI_MODEL_ABSOLUTE_PATH = os.path.join(script_dir, 'model_handlers', current_app_config['shankasoochi']['model_path'])
+SHANKASOOCHI_SCREENSHOT_ABSOLUTE_FOLDER = os.path.join(script_dir, 'static', current_app_config['shankasoochi']['screenshot_folder'])
+SHANKASOOCHI_ALERT_SOUND_ABSOLUTE_PATH = os.path.join(script_dir, 'static', current_app_config['shankasoochi']['alert_sound_path'])
+
+# Update Shankasoochi config with absolute paths (these are used by ShankasoochiCamera)
+current_app_config['shankasoochi']['model_path'] = SHANKASOOCHI_MODEL_ABSOLUTE_PATH
+current_app_config['shankasoochi']['screenshot_folder'] = SHANKASOOCHI_SCREENSHOT_ABSOLUTE_FOLDER
+current_app_config['shankasoochi']['alert_sound_path'] = SHANKASOOCHI_ALERT_SOUND_ABSOLUTE_PATH
+
+# Create a queue for Shankasoochi alerts to be sent to the frontend
+shankasoochi_alert_queue = queue.Queue()
+
+# Save the updated configuration (especially useful if paths changed or new defaults were added)
+save_config(current_app_config)
 
 def stop_all_active_features():
+    """Stops all currently active feature instances gracefully."""
     print("Stopping all active feature instances...")
     for feature_name, instance in active_feature_instance.items():
         if instance is not None:
             with feature_locks[feature_name]:
                 try:
                     instance.stop()
-                    time.sleep(0.5) 
+                    # A small delay to allow threads to shut down
+                    time.sleep(0.5)
                     active_feature_instance[feature_name] = None
                     print(f"Stopped {feature_name}.")
                 except Exception as e:
                     print(f"Error stopping {feature_name}: {e}")
+                    traceback.print_exc() # Log the full traceback
 
 def get_placeholder_frame():
+    """Generates a placeholder image (either from file or dynamically) when no video feed is available."""
     placeholder_path = os.path.join(app.root_path, 'static', 'uploads', 'error_placeholder.jpg')
     try:
         with open(placeholder_path, 'rb') as f:
             return b'--frame\r\n' \
                    b'Content-Type: image/jpeg\r\n\r\n' + f.read() + b'\r\n'
     except FileNotFoundError:
-        print(f"Error: Placeholder image not found at {placeholder_path}! Please ensure it exists.")
+        print(f"Error: Placeholder image not found at {placeholder_path}! Generating dynamic placeholder.")
+        # Create a blank image with error text
         blank_image = np.zeros(shape=[480, 640, 3], dtype=np.uint8)
         text = "NO FEED / ERROR"
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -123,459 +202,505 @@ def get_placeholder_frame():
         cv2.putText(blank_image, text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
         ret, buffer = cv2.imencode('.jpg', blank_image)
         return b'--frame\r\n' \
-               b'Content-Type: image/jpeg\r\r\n' + buffer.tobytes() + b'\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n'
 
+# --- Video Feed Generators ---
+# These functions continuously fetch frames from active camera instances
+# and yield them as multipart JPEG responses.
+def generate_frames_agnidrishti():
+    while True:
+        with feature_locks["agnidrishti"]:
+            camera = active_feature_instance["agnidrishti"]
+        if camera:
+            frame_bytes = camera.get_frame()
+            if frame_bytes:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            else:
+                yield get_placeholder_frame()
+            time.sleep(0.03) # ~30 FPS
+        else:
+            yield get_placeholder_frame()
+            time.sleep(1) # Sleep longer if no camera active
 
+def generate_frames_forbidden_zone():
+    while True:
+        with feature_locks["forbidden_zone"]:
+            camera = active_feature_instance["forbidden_zone"]
+        if camera:
+            frame_bytes = camera.get_frame()
+            if frame_bytes:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            else:
+                yield get_placeholder_frame()
+            time.sleep(0.03)
+        else:
+            yield get_placeholder_frame()
+            time.sleep(1)
+
+def generate_frames_vihangvetri():
+    while True:
+        with feature_locks["vihangvetri"]:
+            camera = active_feature_instance["vihangvetri"]
+        if camera:
+            frame_bytes = camera.get_frame()
+            if frame_bytes:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            else:
+                yield get_placeholder_frame()
+            time.sleep(0.03)
+        else:
+            yield get_placeholder_frame()
+            time.sleep(1)
+
+def generate_frames_margadarshi():
+    while True:
+        with feature_locks["margadarshi"]:
+            camera = active_feature_instance["margadarshi"]
+        if camera:
+            frame_bytes = camera.get_frame()
+            if frame_bytes:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            else:
+                yield get_placeholder_frame()
+            time.sleep(0.03)
+        else:
+            yield get_placeholder_frame()
+            time.sleep(1)
+
+# NEW: Generator for Shankasoochi frames
+def generate_frames_shankasoochi():
+    while True:
+        with feature_locks["shankasoochi"]:
+            camera = active_feature_instance["shankasoochi"]
+        if camera:
+            frame_bytes = camera.get_frame()
+            if frame_bytes:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            else:
+                yield get_placeholder_frame()
+            time.sleep(0.03)
+        else:
+            yield get_placeholder_frame()
+            time.sleep(1)
+
+# --- Flask Routes ---
 @app.route('/')
 def index():
-    stop_all_active_features()
-    return render_template('index.html')
+    # Pass current configurations and active status to the template for display
+    agnidrishti_active = active_feature_instance["agnidrishti"] is not None
+    forbidden_zone_active = active_feature_instance["forbidden_zone"] is not None
+    vihangvetri_active = active_feature_instance["vihangvetri"] is not None
+    margadarshi_active = active_feature_instance["margadarshi"] is not None
+    shankasoochi_active = active_feature_instance["shankasoochi"] is not None # NEW
+
+    # Create display-friendly config dictionaries (excluding paths/sensitive info)
+    agnidrishti_config_display = {k: v for k, v in current_app_config['agnidrishti'].items()
+                                  if k not in ['voice_gender', 'detection_cooldown_seconds']}
+    shankasoochi_config_display = {k: v for k, v in current_app_config['shankasoochi'].items()
+                                   if k not in ['model_path', 'screenshot_folder', 'alert_sound_path']} # NEW
+
+    return render_template('index.html',
+                           now=datetime.now(), # Pass current time for "Last Update"
+                           agnidrishti_config=agnidrishti_config_display,
+                           agnidrishti_active=agnidrishti_active,
+                           forbidden_zone_source=current_forbidden_zone_source,
+                           forbidden_zone_alert_active=get_fzids_alert_active(),
+                           forbidden_zone_active=forbidden_zone_active,
+                           vihangvetri_source=current_vihangvetri_source,
+                           vihangvetri_active=vihangvetri_active,
+                           margadarshi_config=current_margadarshi_config, # Passing full config for Margadarshi
+                           margadarshi_active=margadarshi_active,
+                           shankasoochi_config=shankasoochi_config_display, # NEW: Pass this to index.html
+                           shankasoochi_active=shankasoochi_active # NEW
+                          )
 
 @app.route('/features')
 def features():
-    stop_all_active_features()
-    return render_template('features.html')
+    # Route for the Features page, passes current time for "Last Update"
+    return render_template('features.html', now=datetime.now())
 
+# Route for Agnidrishti Dashboard (assuming a template exists for it)
 @app.route('/dashboard')
-def dashboard():
-    stop_all_active_features()
-    with feature_locks["agnidrishti"]:
-        if active_feature_instance["agnidrishti"] is None:
-            active_feature_instance["agnidrishti"] = AgnidrishtiCamera(config=current_agnidrishti_config)
-            print("AgnidrishtiCamera (Dashboard) started.")
-    return render_template('dashboard.html', config=current_agnidrishti_config, now=datetime.now())
+def agnidrishti_dashboard():
+    return render_template('agnidrishti_dashboard.html', now=datetime.now())
 
+# Route for Simharekha Dashboard (assuming a template exists for it)
 @app.route('/forbidden_zone_ids')
-def forbidden_zone_ids():
-    stop_all_active_features()
-    global current_forbidden_zone_source
-    with feature_locks["forbidden_zone"]:
-        if active_feature_instance["forbidden_zone"] is None:
-            active_feature_instance["forbidden_zone"] = ForbiddenZoneIDS(video_source=current_forbidden_zone_source)
-            print("ForbiddenZoneIDS started.")
-    return render_template('forbidden_zone.html', current_source=current_forbidden_zone_source)
+def simharekha_dashboard():
+    return render_template('simharekha_dashboard.html', now=datetime.now())
 
+# Route for VihangVetri Dashboard (assuming a template exists for it)
 @app.route('/vihangvetri_dashboard')
 def vihangvetri_dashboard():
-    stop_all_active_features()
-    global current_vihangvetri_source
-    with feature_locks["vihangvetri"]:
-        if active_feature_instance["vihangvetri"] is None:
-            active_feature_instance["vihangvetri"] = VihangVetriCamera(video_source=current_vihangvetri_source)
-            print("VihangVetriCamera started.")
-    initial_zone = active_feature_instance["vihangvetri"].zone if active_feature_instance["vihangvetri"] else {'x': 0, 'y': 0, 'width': 0, 'height': 0}
-    return render_template('vihangvetri_dashboard.html', 
-                           current_source=current_vihangvetri_source,
-                           initial_zone_x=initial_zone['x'],
-                           initial_zone_y=initial_zone['y'],
-                           initial_zone_width=initial_zone['width'],
-                           initial_zone_height=initial_zone['height'])
+    return render_template('vihangvetri_dashboard.html', now=datetime.now())
 
-# NEW: Margadarshi Dashboard Route
+# Route for Margadarshi Dashboard
 @app.route('/margadarshi_dashboard')
 def margadarshi_dashboard():
+    return render_template('margadarshi_dashboard.html', now=datetime.now())
+
+# NEW: Route for Shankasoochi Dashboard
+@app.route('/shankasoochi_dashboard')
+def shankasoochi_dashboard():
+    # Pass current configurations and active status to the template for display
+    shankasoochi_active = active_feature_instance["shankasoochi"] is not None
+    shankasoochi_config_display = {k: v for k, v in current_app_config['shankasoochi'].items()
+                                   if k not in ['model_path', 'screenshot_folder', 'alert_sound_path']}
+
+    return render_template('shankasoochi_dashboard.html',
+                           now=datetime.now(),
+                           shankasoochi_config=shankasoochi_config_display, # <--- THIS IS THE FIX YOU NEEDED
+                           shankasoochi_active=shankasoochi_active
+                          )
+
+# NEW: Endpoint to get Shankasoochi config for frontend form population
+@app.route('/get_shankasoochi_config', methods=['GET'])
+def get_shankasoochi_config():
+    # Return a copy of the config, excluding absolute paths for security/simplicity
+    config_for_frontend = {k: v for k, v in current_app_config['shankasoochi'].items()
+                           if k not in ['model_path', 'screenshot_folder', 'alert_sound_path']}
+    return jsonify(config_for_frontend)
+
+
+# --- Video Feed Endpoints ---
+@app.route('/video_feed_agnidrishti')
+def video_feed_agnidrishti():
+    return Response(generate_frames_agnidrishti(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/video_feed_forbidden_zone')
+def video_feed_forbidden_zone():
+    return Response(generate_frames_forbidden_zone(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/video_feed_vihangvetri')
+def video_feed_vihangvetri():
+    return Response(generate_frames_vihangvetri(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/video_feed_margadarshi')
+def video_feed_margadarshi():
+    return Response(generate_frames_margadarshi(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# NEW: Shankasoochi video feed endpoint
+@app.route('/video_feed_shankasoochi')
+def video_feed_shankasoochi():
+    return Response(generate_frames_shankasoochi(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# --- Start/Stop Endpoints for all features ---
+@app.route('/start_feature/<feature_name>', methods=['POST'])
+def start_feature(feature_name):
+    global current_forbidden_zone_source, current_vihangvetri_source, current_margadarshi_config
+
+    # Stop all other features to ensure only one video stream is active at a time
+    # This prevents resource contention and multiple AI models running simultaneously
     stop_all_active_features()
-    global current_margadarshi_config
-    with feature_locks["margadarshi"]:
-        if active_feature_instance["margadarshi"] is None:
-            # Pass the current config to the MargadarshiCamera instance
-            active_feature_instance["margadarshi"] = MargadarshiCamera(config=current_margadarshi_config)
-            print("MargadarshiCamera started.")
-    
-    # Get initial zone from the instance for frontend display
-    initial_zone_pixels = active_feature_instance["margadarshi"].get_current_zone_pixels() if active_feature_instance["margadarshi"] else {'x': 0, 'y': 0, 'width': 0, 'height': 0}
 
-    return render_template('margadarshi_dashboard.html', 
-                           config=current_margadarshi_config,
-                           initial_zone_x=initial_zone_pixels['x'],
-                           initial_zone_y=initial_zone_pixels['y'],
-                           initial_zone_width=initial_zone_pixels['width'],
-                           initial_zone_height=initial_zone_pixels['height'],
-                           now=datetime.now())
-
-
-@app.route('/video_feed/<feature_name>')
-def video_feed(feature_name):
-    if feature_name not in active_feature_instance:
-        print(f"Video feed requested for unknown feature: {feature_name}")
-        return Response(get_placeholder_frame(), mimetype='multipart/x-mixed-replace; boundary=frame')
-    
-    # Add a small wait for Margadarshi to initialize if it's not ready
-    if feature_name == "margadarshi":
-        timeout = 5 # seconds
-        start_time = time.time()
-        while active_feature_instance[feature_name] is None and (time.time() - start_time) < timeout:
-            time.sleep(0.1) # Wait for 100ms
-        
-        if active_feature_instance[feature_name] is None:
-            print(f"Timeout: Margadarshi instance not ready after {timeout} seconds. Serving placeholder.")
-            return Response(get_placeholder_frame(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-    # If the instance is still None after waiting (or for other features), serve placeholder
-    if active_feature_instance[feature_name] is None:
-        print(f"Video feed requested for inactive feature: {feature_name}. Serving placeholder.")
-        return Response(get_placeholder_frame(), mimetype='multipart/x-mixed-replace; boundary=frame')
-    
-    if feature_name == "agnidrishti":
-        return Response(active_feature_instance[feature_name].gen_frames(),
-                        mimetype='multipart/x-mixed-replace; boundary=frame')
-    elif feature_name == "forbidden_zone":
-        return Response(active_feature_instance[feature_name].generate_frames(),
-                        mimetype='multipart/x-mixed-replace; boundary=frame')
-    elif feature_name == "vihangvetri":
-        return Response(active_feature_instance[feature_name].generate_frames(),
-                        mimetype='multipart/x-mixed-replace; boundary=frame')
-    # NEW: Margadarshi video feed
-    elif feature_name == "margadarshi":
-        return Response(active_feature_instance[feature_name].generate_frames(),
-                        mimetype='multipart/x-mixed-replace; boundary=frame')
-    else:
-        return Response(get_placeholder_frame(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-
-@app.route('/configure_stream', methods=['POST'])
-def configure_stream():
-    global current_agnidrishti_config
-
-    new_source = request.form.get('camera_source_input')
-    if new_source:
+    with feature_locks[feature_name]:
         try:
-            current_agnidrishti_config['camera_source'] = int(new_source) if new_source.isdigit() else new_source
-        except ValueError:
-            print(f"Warning: Invalid camera source input '{new_source}'. Keeping current.")
+            if feature_name == "agnidrishti":
+                source = current_app_config['agnidrishti']['camera_source']
+                active_feature_instance[feature_name] = AgnidrishtiCamera(
+                    source=source,
+                    rotation_angle=current_app_config['agnidrishti']['rotation_angle'],
+                    ir_mode=current_app_config['agnidrishti']['ir_mode'],
+                    voice_alerts_enabled=current_app_config['agnidrishti']['voice_alerts_enabled'],
+                    voice_gender=current_app_config['agnidrishti']['voice_gender'],
+                    detection_cooldown_seconds=current_app_config['agnidrishti']['detection_cooldown_seconds']
+                )
+            elif feature_name == "forbidden_zone":
+                source = current_forbidden_zone_source
+                active_feature_instance[feature_name] = ForbiddenZoneIDS(source=source)
+            elif feature_name == "vihangvetri":
+                source = current_vihangvetri_source
+                active_feature_instance[feature_name] = VihangVetriCamera(source=source)
+            elif feature_name == "margadarshi":
+                source = current_margadarshi_config['camera_source'] # Use config from global
+                active_feature_instance[feature_name] = MargadarshiCamera(source=source, config=current_margadarshi_config)
+            # NEW: Shankasoochi start logic
+            elif feature_name == "shankasoochi":
+                # Use the complete, absolute paths from the loaded config
+                source = current_app_config['shankasoochi']['camera_source']
+                active_feature_instance[feature_name] = ShankasoochiCamera(
+                    source=source,
+                    config=current_app_config['shankasoochi'],
+                    alert_queue=shankasoochi_alert_queue # Pass the queue for alerts
+                )
+            else:
+                return jsonify({"status": "error", "message": "Unknown feature"}), 400
 
-    rotation_str = request.form.get('rotation_angle', '0')
-    try:
-        current_agnidrishti_config['rotation_angle'] = int(rotation_str)
-    except ValueError:
-        print(f"Warning: Invalid rotation angle input '{rotation_str}'. Keeping current.")
-    
-    current_agnidrishti_config['voice_alerts_enabled'] = 'voice_alerts_enabled' in request.form
-    current_agnidrishti_config['voice_gender'] = request.form.get('voice_gender', current_agnidrishti_config['voice_gender'])
-    current_agnidrishti_config['detection_cooldown_seconds'] = int(request.form.get('detection_cooldown_seconds', current_agnidrishti_config['detection_cooldown_seconds']))
+            active_feature_instance[feature_name].start()
+            print(f"Started {feature_name} with source {source}")
+            return jsonify({"status": "success", "message": f"{feature_name} started."})
+        except Exception as e:
+            traceback.print_exc() # Print full traceback to console for debugging
+            print(f"Error starting {feature_name}: {e}")
+            return jsonify({"status": "error", "message": f"Failed to start {feature_name}: {str(e)}"}), 500
 
-    save_agnidrishti_config(current_agnidrishti_config)
-    print(f"Agnidrishti Configuration updated: {current_agnidrishti_config}")
-    
-    with feature_locks["agnidrishti"]:
-        if active_feature_instance["agnidrishti"]:
-            active_feature_instance["agnidrishti"].update_config(current_agnidrishti_config)
-
-    return redirect(url_for('dashboard'))
-
-@app.route('/toggle_ir_mode', methods=['POST'])
-def toggle_ir_mode():
-    global current_agnidrishti_config
-
-    current_agnidrishti_config['ir_mode'] = not current_agnidrishti_config['ir_mode']
-    save_agnidrishti_config(current_agnidrishti_config)
-    print(f"Agnidrishti IR Mode toggled to: {current_agnidrishti_config['ir_mode']}")
-    
-    with feature_locks["agnidrishti"]:
-        if active_feature_instance["agnidrishti"]:
-            active_feature_instance["agnidrishti"].update_config(current_agnidrishti_config)
-
-    return jsonify({'success': True, 'new_ir_state': current_agnidrishti_config['ir_mode']})
-
-
-@app.route('/set_forbidden_zone_source', methods=['POST'])
-def set_forbidden_zone_source():
-    global current_forbidden_zone_source
-    data = request.get_json()
-    new_source = data.get('source')
-    
-    if new_source is None:
-        return jsonify({"status": "error", "message": "No source provided"}), 400
-
-    print(f"Attempting to change Forbidden Zone IDS source to: {new_source}")
-    current_forbidden_zone_source = new_source
-    
-    stop_all_active_features()
-    
-    return jsonify({"status": "success", "message": f"Forbidden Zone IDS source set to {new_source}. Please refresh the page or navigate to the Forbidden Zone IDS feature."})
-
-
-@app.route('/fzids_toggle_zone/<zone_name>', methods=['POST'])
-def fzids_toggle_zone(zone_name):
-    with feature_locks["forbidden_zone"]:
-        if active_feature_instance["forbidden_zone"]:
-            is_active = active_feature_instance["forbidden_zone"].toggle_zone_active(zone_name)
-            if is_active is not None:
-                return jsonify({"status": "success", "zone": zone_name, "active": is_active})
-            return jsonify({"status": "error", "message": f"Zone {zone_name} not found"}), 404
-        return jsonify({"status": "error", "message": "Forbidden Zone IDS not running"}), 400
-
-@app.route('/fzids_scale_zone/<zone_name>/<action>', methods=['POST'])
-def fzids_scale_zone(zone_name, action):
-    increase = (action == 'increase')
-    with feature_locks["forbidden_zone"]:
-        if active_feature_instance["forbidden_zone"]:
-            scale_factor = active_feature_instance["forbidden_zone"].scale_zone(zone_name, increase)
-            if scale_factor is not None:
-                return jsonify({"status": "success", "zone": zone_name, "scale_factor": scale_factor})
-            return jsonify({"status": "error", "message": f"Zone {zone_name} not found"}), 404
-        return jsonify({"status": "error", "message": "Forbidden Zone IDS not running"}), 400
-
-@app.route('/fzids_reset_zones', methods=['POST'])
-def fzids_reset_zones():
-    with feature_locks["forbidden_zone"]:
-        if active_feature_instance["forbidden_zone"]:
-            active_feature_instance["forbidden_zone"].reset_zones()
-            return jsonify({"status": "success", "message": "Zones reset to default"})
-        return jsonify({"status": "error", "message": "Forbidden Zone IDS not running"}), 400
-
-
-@app.route('/set_vihangvetri_source', methods=['POST'])
-def set_vihangvetri_source():
-    global current_vihangvetri_source
-    data = request.get_json()
-    new_source = data.get('source')
-    
-    if new_source is None:
-        return jsonify({"status": "error", "message": "No source provided"}), 400
-
-    print(f"Attempting to change VihangVetri source to: {new_source}")
-    current_vihangvetri_source = new_source
-    
-    stop_all_active_features()
-    
-    return jsonify({"status": "success", "message": f"VihangVetri source set to {new_source}. Please refresh the page or navigate to the VihangVetri feature."})
-
-@app.route('/set_vihangvetri_zone', methods=['POST'])
-def set_vihangvetri_zone():
-    data = request.get_json()
-    try:
-        x = int(data.get('x'))
-        y = int(data.get('y'))
-        width = int(data.get('width'))
-        height = int(data.get('height'))
-    except (TypeError, ValueError):
-        return jsonify({"status": "error", "message": "Invalid zone coordinates or dimensions"}), 400
-
-    with feature_locks["vihangvetri"]:
-        if active_feature_instance["vihangvetri"]:
-            active_feature_instance["vihangvetri"].set_zone(x, y, width, height)
-            return jsonify({"status": "success", "message": "VihangVetri zone updated"})
-        return jsonify({"status": "error", "message": "VihangVetri not running"}), 400
-
-@app.route('/reset_vihangvetri_zone', methods=['POST'])
-def reset_vihangvetri_zone():
-    with feature_locks["vihangvetri"]:
-        if active_feature_instance["vihangvetri"]:
-            active_feature_instance["vihangvetri"].reset_zone()
-            return jsonify({"status": "success", "message": "VihangVetri zone reset to default"})
-        return jsonify({"status": "error", "message": "VihangVetri not running"}), 400
-
-# NEW: Margadarshi Configuration Routes
-@app.route('/set_margadarshi_source', methods=['POST'])
-def set_margadarshi_source():
-    global current_margadarshi_config
-    data = request.get_json()
-    new_source = data.get('source')
-    
-    if new_source is None:
-        return jsonify({"status": "error", "message": "No source provided"}), 400
-
-    print(f"Attempting to change Margadarshi source to: {new_source}")
-    current_margadarshi_config['IP_STREAM_URL'] = new_source
-    
-    stop_all_active_features() # Restart to apply new source
-    
-    return jsonify({"status": "success", "message": f"Margadarshi source set to {new_source}. Please refresh the page or navigate to the Margadarshi feature."})
-
-@app.route('/update_margadarshi_config', methods=['POST'])
-def update_margadarshi_config():
-    global current_margadarshi_config
-    
-    # Ensure request body is JSON and not empty
-    data = request.get_json(silent=True) # silent=True returns None if parsing fails
-    if not data or not isinstance(data, dict):
-        print(f"ERROR: Invalid or empty JSON received for Margadarshi config update. Data: {data}")
-        return jsonify({"status": "error", "message": "Invalid or empty JSON data received"}), 400
-
-    updated_values = {}
-    
-    # Handle numerical inputs
-    for key in ["CONFIDENCE_THRESHOLD", "NMS_IOU_THRESHOLD", "LOG_INTERVAL_NOT_CLEAR_SEC", "MAX_PIXEL_DISTANCE_FOR_TRACK", "TRACK_EXPIRY_FRAMES"]:
-        if key in data and data[key] is not None:
+@app.route('/stop_feature/<feature_name>', methods=['POST'])
+def stop_feature(feature_name):
+    with feature_locks[feature_name]:
+        if active_feature_instance[feature_name]:
             try:
-                updated_values[key] = float(data[key]) if "THRESHOLD" in key else int(data[key])
-            except (TypeError, ValueError):
-                print(f"Warning: Invalid value for {key}: {data[key]}")
-                # Optionally, return an error to the frontend, but continue processing other valid fields
-    
-    # Handle boolean toggles
-    for key in ["IR_MODE", "VOICE_ALERTS_ENABLED", "VISUAL_ALERT_ENABLED", "AUTO_SCREENSHOT_ENABLED", "ALERT_SOUND_ENABLED"]:
-        if key in data:
-            updated_values[key] = bool(data[key])
+                active_feature_instance[feature_name].stop()
+                active_feature_instance[feature_name] = None
+                print(f"Stopped {feature_name}.")
+                return jsonify({"status": "success", "message": f"{feature_name} stopped."})
+            except Exception as e:
+                traceback.print_exc()
+                print(f"Error stopping {feature_name}: {e}")
+                return jsonify({"status": "error", "message": f"Failed to stop {feature_name}: {str(e)}"}), 500
+        return jsonify({"status": "info", "message": f"{feature_name} not running."})
 
-    # Handle rotation (integer 0-3)
-    if "ROTATION_STATE" in data and data["ROTATION_STATE"] is not None:
-        try:
-            updated_values["ROTATION_STATE"] = int(data["ROTATION_STATE"]) % 4
-        except (TypeError, ValueError):
-            print(f"Warning: Invalid value for ROTATION_STATE: {data['ROTATION_STATE']}")
-
-    # Update global config
-    current_margadarshi_config.update(updated_values)
-
-    # Update live instance if running
-    with feature_locks["margadarshi"]:
-        if active_feature_instance["margadarshi"]:
-            active_feature_instance["margadarshi"].update_config(updated_values)
-            return jsonify({"status": "success", "message": "Margadarshi configuration updated", "config": current_margadarshi_config})
-        return jsonify({"status": "error", "message": "Margadarshi not running"}), 400
-
-@app.route('/set_margadarshi_zone_proportional', methods=['POST'])
-def set_margadarshi_zone_proportional():
-    data = request.get_json()
+# --- Configuration Endpoints ---
+@app.route('/configure_agnidrishti', methods=['POST'])
+def configure_agnidrishti():
+    global current_app_config
+    data = request.json
     try:
-        tl_x = float(data.get('tl_x_prop'))
-        tl_y = float(data.get('tl_y_prop'))
-        br_x = float(data.get('br_x_prop'))
-        br_y = float(data.get('br_y_prop'))
-    except (TypeError, ValueError):
-        return jsonify({"status": "error", "message": "Invalid zone proportional coordinates"}), 400
+        # Update Agnidrishti configuration based on received data
+        current_app_config['agnidrishti']['camera_source'] = int(data.get('camera_source', current_app_config['agnidrishti']['camera_source']))
+        current_app_config['agnidrishti']['rotation_angle'] = int(data.get('rotation_angle', current_app_config['agnidrishti']['rotation_angle']))
+        current_app_config['agnidrishti']['ir_mode'] = bool(data.get('ir_mode', current_app_config['agnidrishti']['ir_mode']))
+        current_app_config['agnidrishti']['voice_alerts_enabled'] = bool(data.get('voice_alerts_enabled', current_app_config['agnidrishti']['voice_alerts_enabled']))
+        current_app_config['agnidrishti']['voice_gender'] = data.get('voice_gender', current_app_config['agnidrishti']['voice_gender'])
+        current_app_config['agnidrishti']['detection_cooldown_seconds'] = int(data.get('detection_cooldown_seconds', current_app_config['agnidrishti']['detection_cooldown_seconds']))
 
-    with feature_locks["margadarshi"]:
+        save_config(current_app_config)
+        print(f"Agnidrishti Config Updated: {current_app_config['agnidrishti']}")
+        # If Agnidrishti is active, restart it with the new configuration
+        if active_feature_instance["agnidrishti"]:
+            stop_feature("agnidrishti")
+            # Call start_feature which will re-instantiate with the updated current_app_config
+            return start_feature("agnidrishti")
+        return jsonify({"status": "success", "message": "Agnidrishti configuration updated."})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": f"Failed to update Agnidrishti configuration: {str(e)}"}), 400
+
+@app.route('/configure_forbidden_zone', methods=['POST'])
+def configure_forbidden_zone():
+    global current_forbidden_zone_source
+    data = request.json
+    try:
+        new_source = data.get('camera_source')
+        if new_source is not None:
+            current_forbidden_zone_source = new_source
+            print(f"Forbidden Zone Source Updated: {current_forbidden_zone_source}")
+            # If Forbidden Zone is active, restart it with the new source
+            if active_feature_instance["forbidden_zone"]:
+                stop_feature("forbidden_zone")
+                return start_feature("forbidden_zone")
+            return jsonify({"status": "success", "message": "Forbidden Zone configuration updated."})
+        return jsonify({"status": "error", "message": "No camera source provided."}), 400
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": f"Failed to update Forbidden Zone configuration: {str(e)}"}), 400
+
+@app.route('/toggle_forbidden_zone_alert', methods=['POST'])
+def toggle_forbidden_zone_alert():
+    data = request.json
+    new_state = data.get('active')
+    if new_state is not None:
+        set_fzids_alert_active(new_state)
+        print(f"Forbidden Zone Alert Active: {get_fzids_alert_active()}")
+        return jsonify({"status": "success", "active": get_fzids_alert_active()})
+    return jsonify({"status": "error", "message": "Invalid state"}), 400
+
+@app.route('/get_forbidden_zone_logs')
+def get_forbidden_zone_logs():
+    logs = []
+    # Drain the queue, but don't block if empty
+    while not intrusion_log_queue.empty():
+        try:
+            logs.append(intrusion_log_queue.get_nowait())
+        except queue.Empty:
+            break
+    return jsonify({"logs": logs})
+
+@app.route('/configure_vihangvetri', methods=['POST'])
+def configure_vihangvetri():
+    global current_vihangvetri_source
+    data = request.json
+    try:
+        new_source = data.get('camera_source')
+        if new_source is not None:
+            current_vihangvetri_source = new_source
+            print(f"VihangVetri Source Updated: {current_vihangvetri_source}")
+            # If VihangVetri is active, restart it with the new source
+            if active_feature_instance["vihangvetri"]:
+                stop_feature("vihangvetri")
+                return start_feature("vihangvetri")
+            return jsonify({"status": "success", "message": "VihangVetri configuration updated."})
+        return jsonify({"status": "error", "message": "No camera source provided."}), 400
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": f"Failed to update VihangVetri configuration: {str(e)}"}), 400
+
+@app.route('/configure_margadarshi', methods=['POST'])
+def configure_margadarshi():
+    global current_margadarshi_config
+    data = request.json
+    try:
+        # Update Margadarshi config parameters from request data
+        # Ensure correct type casting for numeric and boolean values
+        current_margadarshi_config['camera_source'] = data.get('camera_source', current_margadarshi_config['camera_source'])
+        current_margadarshi_config['object_classes'] = data.get('object_classes', current_margadarshi_config['object_classes'])
+        current_margadarshi_config['confidence_threshold'] = float(data.get('confidence_threshold', current_margadarshi_config['confidence_threshold']))
+        # Line coordinates might come as strings from form, ensure they are converted to list of lists of ints
+        if 'line_coords' in data and data['line_coords'] is not None:
+            current_margadarshi_config['line_coords'] = [list(map(int, point)) for point in data['line_coords']]
+        current_margadarshi_config['alert_cooldown'] = int(data.get('alert_cooldown', current_margadarshi_config['alert_cooldown']))
+        current_margadarshi_config['direction'] = data.get('direction', current_margadarshi_config['direction'])
+
+        print(f"Margadarshi Config Updated: {current_margadarshi_config}")
+        # If Margadarshi is active, restart it with new config
         if active_feature_instance["margadarshi"]:
-            active_feature_instance["margadarshi"].set_zone_proportional(tl_x, tl_y, br_x, br_y)
-            return jsonify({"status": "success", "message": "Margadarshi zone updated proportionally"})
-        return jsonify({"status": "error", "message": "Margadarshi not running"}), 400
+            stop_feature("margadarshi")
+            return start_feature("margadarshi")
+        return jsonify({"status": "success", "message": "Margadarshi configuration updated."})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": f"Failed to update Margadarshi configuration: {str(e)}"}), 400
 
-@app.route('/reset_margadarshi_zone', methods=['POST'])
-def reset_margadarshi_zone():
-    with feature_locks["margadarshi"]:
-        if active_feature_instance["margadarshi"]:
-            active_feature_instance["margadarshi"].reset_zone_to_default()
-            return jsonify({"status": "success", "message": "Margadarshi zone reset to default"})
-        return jsonify({"status": "error", "message": "Margadarshi not running"}), 400
+# NEW: Shankasoochi configuration endpoint
+@app.route('/configure_shankasoochi', methods=['POST'])
+def configure_shankasoochi():
+    global current_app_config
+    data = request.json
+    try:
+        # Update Shankasoochi configuration based on received data
+        current_app_config['shankasoochi']['camera_source'] = int(data.get('camera_source', current_app_config['shankasoochi']['camera_source']))
+        current_app_config['shankasoochi']['tracker'] = data.get('tracker', current_app_config['shankasoochi']['tracker'])
+        current_app_config['shankasoochi']['conf'] = float(data.get('conf', current_app_config['shankasoochi']['conf']))
+        current_app_config['shankasoochi']['iou'] = float(data.get('iou', current_app_config['shankasoochi']['iou']))
+        current_app_config['shankasoochi']['agnostic_nms'] = bool(data.get('agnostic_nms', current_app_config['shankasoochi']['agnostic_nms']))
+        current_app_config['shankasoochi']['max_assoc_dist'] = int(data.get('max_assoc_dist', current_app_config['shankasoochi']['max_assoc_dist']))
+        current_app_config['shankasoochi']['holding_margin'] = int(data.get('holding_margin', current_app_config['shankasoochi']['holding_margin']))
+        current_app_config['shankasoochi']['sticky_frames'] = int(data.get('sticky_frames', current_app_config['shankasoochi']['sticky_frames']))
+        current_app_config['shankasoochi']['alert_frames'] = int(data.get('alert_frames', current_app_config['shankasoochi']['alert_frames']))
+
+        # model_path, screenshot_folder, and alert_sound_path are managed on app startup
+        # and typically not updated via this config endpoint.
+        save_config(current_app_config)
+        print(f"Shankasoochi Config Updated: {current_app_config['shankasoochi']}")
+        # If Shankasoochi is active, restart it with new config
+        if active_feature_instance["shankasoochi"]:
+            stop_feature("shankasoochi")
+            # Call start_feature which will re-instantiate with the updated current_app_config
+            return start_feature("shankasoochi")
+        return jsonify({"status": "success", "message": "Shankasoochi configuration updated."})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": f"Failed to update Shankasoochi configuration: {str(e)}"}), 400
 
 
+# --- Shutdown Handler ---
+@app.route('/shutdown', methods=['POST'])
+def shutdown():
+    print("Shutting down server...")
+    stop_all_active_features()
+    # Use a threading.Event or similar for more graceful shutdown in complex apps.
+    # For a simple development server, os._exit(0) can force an exit.
+    # In production, rely on the WSGI server's shutdown mechanism.
+    threading.Thread(target=lambda: os._exit(0)).start() # Force exit after a small delay
+    return 'Server shutting down...'
+
+
+# --- SocketIO for alerts ---
 @socketio.on('connect')
-def handle_connect():
+def test_connect():
     print('Client connected to SocketIO')
-    pass
-
 
 @socketio.on('disconnect')
-def handle_disconnect():
+def test_disconnect():
     print('Client disconnected from SocketIO')
 
-# Modified log_producer to accept arguments for queue and alert status getters
-def log_producer(agnidrishti_q_getter, fzids_q_getter, fzids_alert_getter, 
-                 vihangvetri_q_getter, vihangvetri_alert_getter,
-                 margadarshi_q_getter, margadarshi_alert_getter):
+def send_intrusion_logs():
+    """Background task to send intrusion logs via SocketIO."""
     while True:
-        try:
-            agnidrishti_q = agnidrishti_q_getter()
-            while not agnidrishti_q.empty():
-                log_entry = agnidrishti_q.get()
-                socketio.emit('agnidrishti_log', {'log': log_entry})
-            
-            fzids_q = fzids_q_getter()
-            while not fzids_q.empty():
-                log_entry = fzids_q.get()
-                socketio.emit('forbidden_zone_log', {'log': log_entry})
-            
-            socketio.emit('forbidden_zone_alert_status', {'active': fzids_alert_getter()})
+        if not intrusion_log_queue.empty():
+            log_entry = intrusion_log_queue.get()
+            socketio.emit('intrusion_log', log_entry)
+        socketio.sleep(0.5) # Check for logs every 0.5 seconds
 
-            vihangvetri_q = vihangvetri_q_getter()
-            while not vihangvetri_q.empty():
-                log_entry = vihangvetri_q.get()
-                socketio.emit('vihangvetri_log', {'log': log_entry})
-            
-            socketio.emit('vihangvetri_alert_status', {'active': vihangvetri_alert_getter()})
+def send_shankasoochi_alerts():
+    """NEW: Background task to send Shankasoochi anomaly alerts via SocketIO."""
+    while True:
+        if not shankasoochi_alert_queue.empty():
+            alert_data = shankasoochi_alert_queue.get()
+            print(f"Emitting Shankasoochi alert: {alert_data.get('description')}")
+            socketio.emit('anomaly_alert', alert_data)
+            # Play sound on the server side when an alert is emitted
+            try:
+                # Correctly refer to the alert sound path from the current_app_config
+                sound_path_from_config = current_app_config['shankasoochi']['alert_sound_path']
+                if os.path.exists(sound_path_from_config):
+                    playsound(sound_path_from_config, block=False)
+                    print(f"Played alert sound: {sound_path_from_config}")
+                else:
+                    print(f"Alert sound file not found for playback: {sound_path_from_config}")
+            except Exception as e:
+                print(f"Error playing alert sound: {e}")
+                traceback.print_exc()
+        socketio.sleep(0.1) # Check for alerts more frequently
 
-            # NEW: Margadarshi logs and alert status
-            margadarshi_q = margadarshi_q_getter()
-            while not margadarshi_q.empty():
-                log_entry = margadarshi_q.get()
-                socketio.emit('margadarshi_log', {'log': log_entry})
-            
-            socketio.emit('margadarshi_alert_status', {'active': margadarshi_alert_getter()})
-
-
-            time.sleep(0.1)
-        except Exception as e:
-            print(f"Error in log_producer: {e}")
-            time.sleep(1)
+# Start background threads to send logs/alerts
+socketio.start_background_task(send_intrusion_logs)
+socketio.start_background_task(send_shankasoochi_alerts) # NEW background task
 
 if __name__ == '__main__':
-    os.makedirs('yolov8_models', exist_ok=True)
-    os.makedirs('detection_logs_live', exist_ok=True)
-    os.makedirs('templates', exist_ok=True)
-    os.makedirs('static', exist_ok=True)
-    os.makedirs('static/uploads', exist_ok=True)
-    os.makedirs('model_handlers', exist_ok=True)
-    os.makedirs('static/runway_alerts', exist_ok=True) # NEW: Create directory for Margadarshi screenshots
+    # --- Ensure necessary directories exist on startup ---
+    # Create the Shankasoochi screenshots folder if it doesn't exist
+    if not os.path.exists(SHANKASOOCHI_SCREENSHOT_ABSOLUTE_FOLDER):
+        os.makedirs(SHANKASOOCHI_SCREENSHOT_ABSOLUTE_FOLDER, exist_ok=True)
+        print(f"Created Shankasoochi screenshot folder: {SHANKASOOCHI_SCREENSHOT_ABSOLUTE_FOLDER}")
 
-    for model_path in [
-        os.path.join('yolov8_models', 'yolov8x.pt'),
-        os.path.join('yolov8_models', 'yolofirenew.pt'),
-        os.path.join('yolov8_models', 'best.pt'),
-        os.path.join('yolov8_models', 'yolov8n.pt') # NEW: Ensure yolov8n.pt exists or is a placeholder
-    ]:
-        if not os.path.exists(model_path):
-            with open(model_path, 'w') as f:
-                f.write("DUMMY_YOLO_MODEL_FILE_PLACEHOLDER")
-            print(f"Created dummy model file: {model_path}. Please replace with your actual YOLO models.")
+    # Create static/audio folder if it doesn't exist
+    audio_dir = os.path.dirname(SHANKASOOCHI_ALERT_SOUND_ABSOLUTE_PATH)
+    if not os.path.exists(audio_dir):
+        os.makedirs(audio_dir, exist_ok=True)
+        print(f"Created audio folder: {audio_dir}")
 
-    if not os.path.exists(CONFIG_FILE):
-        save_agnidrishti_config(DEFAULT_AGNIDRISHTI_CONFIG)
-        print(f"Created initial config file: {CONFIG_FILE}")
+    # Ensure placeholder image exists
+    uploads_dir = os.path.join(app.root_path, 'static', 'uploads')
+    if not os.path.exists(uploads_dir):
+        os.makedirs(uploads_dir, exist_ok=True)
+        print(f"Created uploads folder for placeholder: {uploads_dir}")
 
-    placeholder_path = os.path.join(app.root_path, 'static', 'uploads', 'error_placeholder.jpg')
+    placeholder_path = os.path.join(uploads_dir, 'error_placeholder.jpg')
     if not os.path.exists(placeholder_path):
-        try:
-            blank_image = np.zeros(shape=[480, 640, 3], dtype=np.uint8)
-            text = "NO FEED / ERROR"
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 1
-            font_thickness = 2
-            text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
-            text_x = (blank_image.shape[1] - text_size[0]) // 2
-            text_y = (blank_image.shape[0] + text_size[1]) // 2
-            cv2.putText(blank_image, text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
-            cv2.imwrite(placeholder_path, blank_image)
-            print(f"Created placeholder image: {placeholder_path}")
-        except Exception as e:
-            print(f"Could not create placeholder image: {e}")
+        print(f"Placeholder image '{placeholder_path}' not found. Creating a blank one.")
+        blank_image = np.zeros(shape=[480, 640, 3], dtype=np.uint8)
+        text = "NO FEED / ERROR"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 1
+        font_thickness = 2
+        text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
+        text_x = (blank_image.shape[1] - text_size[0]) // 2
+        text_y = (blank_image.shape[0] + text_size[1]) // 2
+        cv2.putText(blank_image, text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
+        cv2.imwrite(placeholder_path, blank_image)
 
-    # Pass the getter functions to the log_producer thread
-    log_thread = threading.Thread(target=log_producer, daemon=True, args=(
-        agnidrishti_live_module.get_agnidrishti_log_queue, # Access via module
-        lambda: intrusion_log_queue, # Changed to a lambda to make it a getter function
-        get_fzids_alert_active,
-        vihangvetri_live_module.get_vihangvetri_log_queue, # Access via module
-        vihangvetri_live_module.get_vihangvetri_alert_active, # Access via module
-        margadarshi_live_module.get_margadarshi_log_queue, # Access via module
-        margadarshi_live_module.get_margadarshi_alert_active # Access via module
-    ))
-    log_thread.start()
+    # Ensure default alert.wav exists for Shankasoochi
+    # This prevents errors if playsound is called for a non-existent file.
+    # You should place your actual alert.wav file here: `static/audio/alert.wav`
+    # The default path is 'audio/alert.wav' inside 'static'
+    alert_wav_path_in_static_audio = os.path.join(script_dir, 'static', 'audio', 'alert.wav')
+    if not os.path.exists(alert_wav_path_in_static_audio):
+        print(f"Alert sound file '{alert_wav_path_in_static_audio}' not found. "
+              "Please provide a valid .wav file for alerts. "
+              "A silent dummy file can be created if no sound is desired, "
+              "otherwise, audio alerts will not function for Shankasoochi.")
+        # Optional: Create a dummy silent WAV file if you want to ensure the path exists
+        # from scipy.io.wavfile import write
+        # write(alert_wav_path_in_static_audio, 44100, np.zeros(44100, dtype=np.int16)) # 1 second of silence
 
-    # Explicitly list the files to be watched by the reloader
-    watched_files = [
-        os.path.abspath(__file__), # app.py
-        os.path.abspath(os.path.join('model_handlers', 'agnidrishti_live.py')),
-        os.path.abspath(os.path.join('model_handlers', 'simharekha_live.py')),
-        os.path.abspath(os.path.join('model_handlers', 'vihangvetri_live.py')),
-        os.path.abspath(os.path.join('model_handlers', 'margadarshi_live.py')), # NEW: Add Margadarshi
-        os.path.abspath(os.path.join('templates', 'index.html')),
-        os.path.abspath(os.path.join('templates', 'features.html')),
-        os.path.abspath(os.path.join('templates', 'dashboard.html')),
-        os.path.abspath(os.path.join('templates', 'forbidden_zone.html')),
-        os.path.abspath(os.path.join('templates', 'vihangvetri_dashboard.html')),
-        os.path.abspath(os.path.join('templates', 'margadarshi_dashboard.html')), # NEW: Add Margadarshi template
-        os.path.abspath(CONFIG_FILE)
-    ]
-    
-    watched_files = [f for f in watched_files if os.path.exists(f)]
+    print(f"Flask app starting at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
 
-    print("Starting Flask application...")
-    try:
-        socketio.run(app, debug=True, allow_unsafe_werkzeug=True, extra_files=watched_files)
-    except Exception as e:
-        print(f"FATAL ERROR during Flask application startup: {e}")
-        traceback.print_exc() # Print full traceback for more details
-
+    # Ensure all features are stopped on application shutdown
+    stop_all_active_features()
+    print("Flask app terminated.")

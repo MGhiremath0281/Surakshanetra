@@ -1,8 +1,24 @@
 {
-    "camera_source": "C:\\Users\\adity\\Desktop\\SurakshaNethra\\data\\firedata2.mp4",
-    "rotation_angle": 0,
-    "ir_mode": false,
-    "voice_alerts_enabled": true,
-    "voice_gender": "male",
-    "detection_cooldown_seconds": 10
+    "agnidrishti": {
+        "camera_source": 0,
+        "rotation_angle": 0,
+        "ir_mode": false,
+        "voice_alerts_enabled": true,
+        "voice_gender": "male",
+        "detection_cooldown_seconds": 10
+    },
+    "shankasoochi": {
+        "camera_source": 0,
+        "model_path": "C:\\Users\\adity\\Desktop\\SurakshaNethra\\model_handlers\\yolov8x.pt",
+        "screenshot_folder": "C:\\Users\\adity\\Desktop\\SurakshaNethra\\static\\screenshots",
+        "alert_sound_path": "C:\\Users\\adity\\Desktop\\SurakshaNethra\\static\\alert.wav",
+        "tracker": "bytetrack.yaml",
+        "conf": 0.25,
+        "iou": 0.7,
+        "agnostic_nms": false,
+        "max_assoc_dist": 150,
+        "holding_margin": 30,
+        "sticky_frames": 15,
+        "alert_frames": 10
+    }
 }

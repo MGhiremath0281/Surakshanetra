@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shankasoochi Dashboard - SurakshaNethra</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Dark background */
+            color: #e2e8f0; /* Light text */
+        }
+        .sidebar {
+            background-color: #2d3748; /* Darker sidebar */
+        }
+        .dashboard-card {
+            background-color: #2d3748;
+        }
+        .btn-primary {
+            background-color: #4299e1; /* Blue */
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #3182ce;
+        }
+        .anomaly-item {
+            border-left: 4px solid;
+            padding-left: 1rem;
+        }
+        .severity-low { border-color: #48bb78; /* Green */ }
+        .severity-medium { border-color: #ecc94b; /* Yellow */ }
+        .severity-high { border-color: #f56565; /* Red */ }
+    </style>
+</head>
+<body class="flex h-screen bg-gray-900 text-gray-200">
+
+    <aside class="sidebar w-64 p-6 flex flex-col justify-between">
+        <div>
+            <h1 class="text-3xl font-bold mb-8 text-blue-400">SurakshaNethra</h1>
+            <nav>
+                <ul class="space-y-4">
+                    <li><a href="/" class="block py-2 px-4 rounded-lg hover:bg-gray-700 transition duration-200">Home</a></li>
+                    <li><a href="/features" class="block py-2 px-4 rounded-lg hover:bg-gray-700 transition duration-200">Features</a></li>
+                    <li><a href="/dashboard" class="block py-2 px-4 rounded-lg hover:bg-gray-700 transition duration-200">Agnidrishti</a></li>
+                    <li><a href="/forbidden_zone_ids" class="block py-2 px-4 rounded-lg hover:bg-gray-700 transition duration-200">Simharekha</a></li>
+                    <li><a href="/vihangvetri_dashboard" class="block py-2 px-4 rounded-lg hover:bg-gray-700 transition duration-200">VihangVetri</a></li>
+                    <li><a href="/margadarshi_dashboard" class="block py-2 px-4 rounded-lg hover:bg-gray-700 transition duration-200">Margadarshi</a></li>
+                    <li><a href="/shankasoochi_dashboard" class="block py-2 px-4 rounded-lg bg-gray-700 text-white">Shankasoochi</a></li>
+                </ul>
+            </nav>
+        </div>
+        <div class="mt-8">
+            <p class="text-sm text-gray-500">System Status: <span class="text-green-400">Online</span></p>
+            <p class="text-sm text-gray-500">Last Update: {{ now.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col p-8 overflow-auto">
+        <header class="mb-8">
+            <h2 class="text-4xl font-extrabold text-white">Shankasoochi - Anomaly Detection Dashboard</h2>
+            <p class="text-gray-400 mt-2">Monitor for unusual activities and system anomalies.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="dashboard-card rounded-xl shadow-lg p-6 lg:col-span-2">
+                <h3 class="text-2xl font-semibold mb-4 text-blue-300">Anomaly Overview</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                    <div class="bg-gray-700 p-4 rounded-md">
+                        <p class="text-4xl font-bold text-red-400" id="high-severity-count">0</p>
+                        <p class="text-gray-400">High Severity</p>
+                    </div>
+                    <div class="bg-gray-700 p-4 rounded-md">
+                        <p class="text-4xl font-bold text-orange-400" id="medium-severity-count">0</p>
+                        <p class="text-gray-400">Medium Severity</p>
+                    </div>
+                    <div class="bg-gray-700 p-4 rounded-md">
+                        <p class="text-4xl font-bold text-green-400" id="low-severity-count">0</p>
+                        <p class="text-gray-400">Low Severity</p>
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <h4 class="text-xl font-semibold mb-3 text-blue-300">Live Video Feed</h4>
+                    <div class="aspect-video bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
+                        <img id="shankasoochi-video-feed" src="/video_feed_shankasoochi" class="w-full h-full object-contain" alt="Shankasoochi Live Feed">
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card rounded-xl shadow-lg p-6">
+                <h3 class="text-2xl font-semibold mb-4 text-blue-300">Recent Anomalies</h3>
+                <div id="anomaly-log-container" class="space-y-4 h-96 overflow-y-auto pr-2">
+                    <div class="text-gray-500 text-center py-4" id="no-anomalies-message">No recent anomalies detected.</div>
+                </div>
+                <button class="btn-primary py-2 px-4 rounded-md font-semibold w-full mt-4">View All Anomalies</button>
+            </div>
+
+            <div class="dashboard-card rounded-xl shadow-lg p-6 lg:col-span-3">
+                <h3 class="text-2xl font-semibold mb-4 text-blue-300">Shankasoochi Settings</h3>
+                <form id="shankasoochi-config-form" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="camera_source" class="block text-gray-400 text-sm font-bold mb-2">Camera Source:</label>
+                            <input type="text" id="camera_source" name="camera_source" class="shadow appearance-none border rounded w-full py-2 px-3 bg-gray-700 text-gray-200 leading-tight focus:outline-none focus:shadow-outline" placeholder="e.g., 0 for webcam, path/to/video.mp4" value="0">
+                        </div>
+                        <div>
+                            <label for="conf" class="block text-gray-400 text-sm font-bold mb-2">Confidence Threshold (0.0-1.0):</label>
+                            <input type="number" step="0.01" min="0" max="1" id="conf" name="conf" class="shadow appearance-none border rounded w-full py-2 px-3 bg-gray-700 text-gray-200 leading-tight focus:outline-none focus:shadow-outline" value="0.25">
+                        </div>
+                        <div>
+                            <label for="iou" class="block text-gray-400 text-sm font-bold mb-2">IoU Threshold (0.0-1.0):</label>
+                            <input type="number" step="0.01" min="0" max="1" id="iou" name="iou" class="shadow appearance-none border rounded w-full py-2 px-3 bg-gray-700 text-gray-200 leading-tight focus:outline-none focus:shadow-outline" value="0.7">
+                        </div>
+                        <div>
+                            <label for="max_assoc_dist" class="block text-gray-400 text-sm font-bold mb-2">Max Association Distance:</label>
+                            <input type="number" id="max_assoc_dist" name="max_assoc_dist" class="shadow appearance-none border rounded w-full py-2 px-3 bg-gray-700 text-gray-200 leading-tight focus:outline-none focus:shadow-outline" value="150">
+                        </div>
+                        <div>
+                            <label for="holding_margin" class="block text-gray-400 text-sm font-bold mb-2">Holding Margin (frames):</label>
+                            <input type="number" id="holding_margin" name="holding_margin" class="shadow appearance-none border rounded w-full py-2 px-3 bg-gray-700 text-gray-200 leading-tight focus:outline-none focus:shadow-outline" value="30">
+                        </div>
+                        <div>
+                            <label for="sticky_frames" class="block text-gray-400 text-sm font-bold mb-2">Sticky Frames (before alert):</label>
+                            <input type="number" id="sticky_frames" name="sticky_frames" class="shadow appearance-none border rounded w-full py-2 px-3 bg-gray-700 text-gray-200 leading-tight focus:outline-none focus:shadow-outline" value="15">
+                        </div>
+                        <div>
+                            <label for="alert_frames" class="block text-gray-400 text-sm font-bold mb-2">Alert Frames (consecutive):</label>
+                            <input type="number" id="alert_frames" name="alert_frames" class="shadow appearance-none border rounded w-full py-2 px-3 bg-gray-700 text-gray-200 leading-tight focus:outline-none focus:shadow-outline" value="10">
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="agnostic_nms" name="agnostic_nms" class="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded">
+                            <label for="agnostic_nms" class="ml-2 text-gray-400">Agnostic NMS</label>
+                        </div>
+                    </div>
+                    <div class="flex space-x-4">
+                        <button type="submit" class="btn-primary py-2 px-4 rounded-md font-semibold">Save Settings</button>
+                        <button type="button" id="start-shankasoochi" class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md font-semibold">Start Anomaly Detection</button>
+                        <button type="button" id="stop-shankasoochi" class="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md font-semibold">Stop Anomaly Detection</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        // Populate form with current values (assuming they are passed from Flask if needed)
+        // For a full refresh, you'd fetch /get_shankasoochi_config endpoint
+        document.addEventListener('DOMContentLoaded', function() {
+            // Placeholder for populating initial form values if they were passed via Jinja
+            // Example: document.getElementById('camera_source').value = "{{ shankasoochi_config.camera_source }}";
+            // For now, these fields will use their default HTML values.
+            // A dedicated Flask endpoint to GET config values would be better for dynamic updates.
+            fetch('/get_shankasoochi_config') // You'd need to create this endpoint in app.py
+                .then(response => response.json())
+                .then(config => {
+                    document.getElementById('camera_source').value = config.camera_source;
+                    document.getElementById('conf').value = config.conf;
+                    document.getElementById('iou').value = config.iou;
+                    document.getElementById('agnostic_nms').checked = config.agnostic_nms;
+                    document.getElementById('max_assoc_dist').value = config.max_assoc_dist;
+                    document.getElementById('holding_margin').value = config.holding_margin;
+                    document.getElementById('sticky_frames').value = config.sticky_frames;
+                    document.getElementById('alert_frames').value = config.alert_frames;
+                })
+                .catch(error => console.error('Error loading Shankasoochi config:', error));
+        });
+
+
+        // Handle form submission for configuration
+        document.getElementById('shankasoochi-config-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const config = {};
+            for (let [key, value] of formData.entries()) {
+                if (key === 'conf' || key === 'iou') {
+                    config[key] = parseFloat(value);
+                } else if (key === 'agnostic_nms') {
+                    config[key] = (value === 'on'); // Checkbox value is 'on' if checked
+                } else if (!isNaN(parseInt(value))) { // Attempt to convert other numbers
+                    config[key] = parseInt(value);
+                } else {
+                    config[key] = value;
+                }
+            }
+
+            fetch('/configure_shankasoochi', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config)
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                if (data.status === 'success') {
+                    // Optionally update UI or confirm status
+                }
+            })
+            .catch(error => {
+                console.error('Error configuring Shankasoochi:', error);
+                alert('Failed to configure Shankasoochi. Check console for details.');
+            });
+        });
+
+        // Start/Stop buttons
+        document.getElementById('start-shankasoochi').addEventListener('click', function() {
+            fetch('/start_feature/shankasoochi', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => alert(data.message))
+                .catch(error => {
+                    console.error('Error starting Shankasoochi:', error);
+                    alert('Failed to start Shankasoochi. Check console for details.');
+                });
+        });
+
+        document.getElementById('stop-shankasoochi').addEventListener('click', function() {
+            fetch('/stop_feature/shankasoochi', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => alert(data.message))
+                .catch(error => {
+                    console.error('Error stopping Shankasoochi:', error);
+                    alert('Failed to stop Shankasoochi. Check console for details.');
+                });
+        });
+
+        // SocketIO for receiving anomaly alerts (if your Shankasoochi model emits them)
+        // You would need to implement an 'anomaly_alert' emit in your ShankasoochiCamera class.
+        socket.on('anomaly_alert', function(data) {
+            console.log('Anomaly Alert:', data);
+            const logContainer = document.getElementById('anomaly-log-container');
+            const noAnomaliesMessage = document.getElementById('no-anomalies-message');
+
+            if (noAnomaliesMessage) {
+                noAnomaliesMessage.remove();
+            }
+
+            const anomalyDiv = document.createElement('div');
+            anomalyDiv.className = `anomaly-item bg-gray-700 p-4 rounded-md severity-${data.severity.toLowerCase()}`;
+            anomalyDiv.innerHTML = `
+                <p class="font-semibold text-${data.severity.toLowerCase()}-400">${data.type}</p>
+                <p class="text-sm text-gray-400">${data.description}</p>
+                <p class="text-sm text-gray-400">Time: ${new Date(data.timestamp).toLocaleString()}</p>
+                ${data.screenshot_url ? `<img src="${data.screenshot_url}" alt="Anomaly Screenshot" class="mt-2 rounded max-w-full h-auto">` : ''}
+            `;
+            logContainer.prepend(anomalyDiv); // Add new alerts to the top
+
+            // Update severity counts (simple example, would need more robust tracking for real-time)
+            const highCount = parseInt(document.getElementById('high-severity-count').innerText);
+            const mediumCount = parseInt(document.getElementById('medium-severity-count').innerText);
+            const lowCount = parseInt(document.getElementById('low-severity-count').innerText);
+
+            if (data.severity.toLowerCase() === 'high') {
+                document.getElementById('high-severity-count').innerText = highCount + 1;
+            } else if (data.severity.toLowerCase() === 'medium') {
+                document.getElementById('medium-severity-count').innerText = mediumCount + 1;
+            } else if (data.severity.toLowerCase() === 'low') {
+                document.getElementById('low-severity-count').innerText = lowCount + 1;
+            }
+        });
+    </script>
+
+</body>
+</html>

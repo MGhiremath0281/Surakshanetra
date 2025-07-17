@@ -1,0 +1,18 @@
+[
+  {
+    "timestamp": "2025-07-18T01:39:38.208226",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.28",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250718_013938.jpg"
+  },
+  {
+    "timestamp": "2025-07-18T01:39:40.582237",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.60",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250718_013940.jpg"
+  }
+]
