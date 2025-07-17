@@ -1,0 +1,13 @@
+--- Live Detection Log Started: 2025-07-17 18:50:01 ---
+Camera Source: C:\Users\adity\Desktop\SurakshaNethra\data\firedata2.mp4
+Rotation Angle: 0
+IR Mode: False
+Base Model: yolov8x.pt
+Fire Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-17 18:50:01.725] Logging to: detection_logs_live\live_detection_log_20250717_185001.txt
+[2025-07-17 18:50:01.936] ✅ Base model loaded successfully.
+[2025-07-17 18:50:02.030] ✅ Fire model loaded successfully.
+[2025-07-17 18:50:02.059] Starting live detection stream for source: C:\Users\adity\Desktop\SurakshaNethra\data\firedata2.mp4 with rotation=0 and IR_Mode=False
+[2025-07-17 18:50:04.887] ALERT: Vehicle (car) detected, Person detected, Person detected, Vehicle (car) detected, Vehicle (truck) detected, 🔥🔥🔥 Fire detected 🔥🔥🔥
+[2025-07-17 18:50:14.977] ALERT: Person detected, Person detected, Vehicle (car) detected, Vehicle (car) detected, Vehicle (truck) detected, 🔥🔥🔥 Fire detected 🔥🔥🔥
