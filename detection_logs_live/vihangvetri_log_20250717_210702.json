@@ -1,0 +1,44 @@
+[
+  {
+    "timestamp": "2025-07-17T21:07:09.830296",
+    "object_class": "drone",
+    "confidence": "0.81",
+    "zone": {
+      "x": 480,
+      "y": 270,
+      "width": 960,
+      "height": 540
+    },
+    "drone_coords": {
+      "x1": 515,
+      "y1": 300,
+      "x2": 1278,
+      "y2": 577,
+      "cx": 897,
+      "cy": 438
+    },
+    "full_snapshot_file": "vihangvetri_snapshot_20250717_210703.jpg",
+    "drone_crop_file": "vihangvetri_drone_crop_20250717_210703.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T21:07:33.015676",
+    "object_class": "drone",
+    "confidence": "0.78",
+    "zone": {
+      "x": 480,
+      "y": 270,
+      "width": 960,
+      "height": 540
+    },
+    "drone_coords": {
+      "x1": 468,
+      "y1": 324,
+      "x2": 1126,
+      "y2": 626,
+      "cx": 797,
+      "cy": 475
+    },
+    "full_snapshot_file": "vihangvetri_snapshot_20250717_210733.jpg",
+    "drone_crop_file": "vihangvetri_drone_crop_20250717_210733.jpg"
+  }
+]

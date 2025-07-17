@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VihangVetri - Drone Detection System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <style>
+        /* CSS Variables for a Lighter Theme (Copied from dashboard.html) */
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #0056b3;
+            --accent-green: #28a745;
+            --accent-red: #dc3545;
+            --background-color: #f8f9fa; /* Very light background */
+            --container-bg: #ffffff;
+            --panel-bg: #fdfefe; /* White for panels */
+            --border-color: #e0e6eb; /* Light border */
+            --text-color: #343a40; /* Dark gray for text */
+            --light-text-color: #6c757d;
+            --header-color: #212529;
+            --border-radius: 8px;
+            --spacing-unit: 20px;
+            --box-shadow-light: 0 4px 15px rgba(0,0,0,0.08);
+            --box-shadow-panel: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        /* Universal box-sizing for consistent layout calculations */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            margin: 0;
+            padding: var(--spacing-unit);
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        /* Main container for the entire application content */
+        .app-container {
+            max-width: 1600px; /* Wider for new layout */
+            margin: 0 auto;
+            background: var(--container-bg);
+            padding: calc(var(--spacing-unit) * 1.5);
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow-light);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-unit);
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary-color);
+            margin-bottom: var(--spacing-unit);
+            padding-bottom: calc(var(--spacing-unit) / 2);
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5em;
+            font-weight: 700;
+        }
+
+        h2 {
+            color: var(--header-color);
+            margin-top: 0;
+            margin-bottom: calc(var(--spacing-unit) / 1.5);
+            font-size: 1.6em;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        /* NEW: Main Dashboard Grid Layout */
+        .main-dashboard-grid {
+            display: grid;
+            grid-template-columns: 0.8fr 2fr 1fr; /* Left Nav | Video | Right Sidebar */
+            grid-template-rows: auto auto; /* Top row for elements, bottom for logs */
+            gap: var(--spacing-unit);
+            align-items: start; /* Align content to the top */
+        }
+
+        /* Grid Areas Definition */
+        .nav-column {
+            grid-column: 1 / 2;
+            grid-row: 1 / 2;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-unit);
+        }
+
+        .video-column {
+            grid-column: 2 / 3;
+            grid-row: 1 / 2;
+        }
+
+        .controls-column {
+            grid-column: 3 / 4;
+            grid-row: 1 / 2;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-unit);
+        }
+
+        .logs-full-width {
+            grid-column: 1 / -1; /* Spans across all columns */
+            grid-row: 2 / 3;
+        }
+
+        /* Individual Dashboard Panels */
+        .dashboard-panel {
+            background: var(--panel-bg);
+            padding: var(--spacing-unit);
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow-panel);
+            border: 1px solid var(--border-color);
+            width: 100%;
+        }
+
+        /* Left Navigation Sidebar Styling */
+        .nav-sidebar-item {
+            padding: calc(var(--spacing-unit) * 0.8);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            background-color: var(--panel-bg);
+            box-shadow: var(--box-shadow-panel);
+            margin-bottom: var(--spacing-unit);
+        }
+        .nav-sidebar-item h3 {
+            color: var(--primary-color);
+            font-size: 1.2em;
+            margin-top: 0;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+        }
+        .nav-sidebar-item ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .nav-sidebar-item ul li {
+            padding: 8px 0;
+            border-bottom: 1px dashed rgba(0,0,0,0.08);
+            color: var(--light-text-color);
+        }
+        .nav-sidebar-item ul li:last-child {
+            border-bottom: none;
+        }
+        .nav-sidebar-item .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background-color: grey; /* Default */
+        }
+        .nav-sidebar-item .status-indicator.online { background-color: var(--accent-green); }
+        .nav-sidebar-item .status-indicator.offline { background-color: var(--accent-red); }
+        .nav-sidebar-item .status-indicator.active { background-color: var(--primary-color); }
+
+
+        /* Video Area Styling */
+        .video-area {
+            background-color: #000;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 550px; /* Adjusted height for better balance */
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: relative; /* For status overlay */
+        }
+        .video-area img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            object-fit: contain;
+        }
+        .video-status-overlay {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            font-family: 'Roboto Mono', monospace; /* More technical feel for overlay */
+        }
+
+        /* Styling for forms and inputs */
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--light-text-color);
+        }
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            font-size: 1em;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            background-color: #fff;
+        }
+        .form-group input[type="text"]:focus,
+        .form-group input[type="number"]:focus,
+        .form-group select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+            outline: none;
+        }
+        .form-group input[type="checkbox"] {
+            margin-right: 8px;
+        }
+
+
+        /* Buttons styling */
+        .controls button {
+            padding: 12px 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.05em;
+            margin-top: 15px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            width: 100%;
+        }
+        .controls button:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-1px);
+        }
+        .controls button:active {
+            transform: translateY(0);
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+        }
+        /* Specific button styles for FZIDS / VihangVetri */
+        .controls button.action-button { /* For set zone, reset zone */
+            background-color: #2ecc71; /* Green */
+        }
+        .controls button.action-button:hover {
+            background-color: #27ae60;
+        }
+        .controls button.red-button { /* For reset zones */
+            background-color: var(--accent-red);
+        }
+        .controls button.red-button:hover {
+            background-color: #c82333;
+        }
+
+
+        /* Logs Container Specific Styling */
+        .logs-container {
+            max-height: 350px; /* Fixed height for log area */
+            overflow-y: auto; /* Enable vertical scrolling */
+            background-color: #e9edf1; /* Light background for logs */
+            border: 1px solid var(--border-color);
+            font-size: 0.85em;
+            padding: 0; /* Removed padding here, moved to .log-output */
+        }
+        .logs-container h2 {
+            margin-bottom: 0; /* Reduced margin to stick to log output */
+            padding: 10px; /* Align with log output padding */
+            background-color: #e0e6eb; /* Slightly darker header for logs */
+            border-top-left-radius: var(--border-radius); /* Rounded corners for header */
+            border-top-right-radius: var(--border-radius);
+        }
+        .log-output { /* Style for the actual log display div */
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Roboto Mono', monospace; /* Monospace for logs */
+            font-size: 0.9em;
+            margin: 0;
+            padding: 10px; /* Padding inside the log display div */
+            color: var(--text-color);
+        }
+        .log-output p { /* Style for individual log lines */
+            margin: 0;
+            padding: 2px 0;
+            border-bottom: 1px dotted rgba(0,0,0,0.1); /* Subtle separator */
+        }
+        .log-output p:last-child {
+            border-bottom: none;
+        }
+
+        /* Back to Features button */
+        .back-to-features {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #6c757d; /* Gray */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            font-size: 1em;
+            transition: background-color 0.2s ease;
+        }
+        .back-to-features:hover {
+            background-color: #5a6268;
+        }
+
+        /* VihangVetri specific alert indicator */
+        .alert-indicator {
+            width: 40px; /* Larger */
+            height: 40px; /* Larger */
+            border-radius: 50%;
+            background-color: var(--light-text-color); /* Grey when inactive */
+            margin-top: 15px;
+            animation: none;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+            transition: background-color 0.3s ease;
+        }
+        .alert-indicator.active {
+            background-color: var(--accent-red);
+            animation: pulse-red 1s infinite alternate;
+        }
+
+        @keyframes pulse-red {
+            from { background-color: var(--accent-red); box-shadow: 0 0 0px var(--accent-red); }
+            to { background-color: #c0392b; box-shadow: 0 0 20px var(--accent-red); }
+        }
+
+
+        /* Responsive Design using Media Queries (Copied from dashboard.html) */
+
+        /* For screens smaller than 1400px (adjust grid) */
+        @media (max-width: 1400px) {
+            .main-dashboard-grid {
+                grid-template-columns: 1fr 1.5fr; /* Nav-Video | Controls stacked */
+                grid-template-rows: auto auto auto; /* Nav, Video, Controls, Logs */
+            }
+            .nav-column {
+                grid-column: 1 / 2;
+                grid-row: 1 / 2;
+            }
+            .video-column {
+                grid-column: 2 / 3;
+                grid-row: 1 / 2;
+                min-height: 480px;
+            }
+            .controls-column {
+                grid-column: 1 / -1; /* Controls span full width below video/nav */
+                grid-row: 2 / 3;
+            }
+            .logs-full-width {
+                grid-column: 1 / -1;
+                grid-row: 3 / 4;
+            }
+        }
+
+        /* For screens smaller than 992px (stack everything) */
+        @media (max-width: 992px) {
+            .main-dashboard-grid {
+                grid-template-columns: 1fr; /* Single column layout */
+                grid-template-rows: auto; /* Auto rows */
+            }
+            .nav-column,
+            .video-column,
+            .controls-column,
+            .logs-full-width {
+                grid-column: 1 / -1; /* All span full width */
+                grid-row: auto; /* Stack naturally */
+            }
+            .video-area {
+                min-height: 400px;
+            }
+            .logs-container {
+                max-height: 300px;
+            }
+        }
+
+        /* For screens smaller than 768px */
+        @media (max-width: 768px) {
+            body {
+                padding: calc(var(--spacing-unit) / 1.5);
+            }
+            .app-container {
+                padding: var(--spacing-unit);
+            }
+            h1 {
+                font-size: 2em;
+            }
+            h2 {
+                font-size: 1.4em;
+            }
+            .video-area {
+                min-height: 300px;
+            }
+            .dashboard-panel {
+                padding: calc(var(--spacing-unit) * 0.75);
+            }
+            .controls button {
+                padding: 10px 15px;
+                font-size: 1em;
+            }
+            .logs-container {
+                max-height: 250px;
+            }
+        }
+
+        /* For very small screens (e.g., mobile phones) */
+        @media (max-width: 480px) {
+            body {
+                padding: calc(var(--spacing-unit) / 2);
+            }
+            .app-container {
+                padding: calc(var(--spacing-unit) / 1.2);
+                border-radius: 5px;
+                box-shadow: none;
+            }
+            h1 {
+                font-size: 1.8em;
+                margin-bottom: calc(var(--spacing-unit) / 1.5);
+            }
+            .video-area {
+                min-height: 220px;
+            }
+            .form-group input[type="text"],
+            .form-group input[type="number"],
+            .form-group select {
+                padding: 8px;
+                font-size: 0.9em;
+            }
+            .logs-container {
+                max-height: 180px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <h1>VihangVetri - Drone Detection System</h1>
+        <p style="text-align: center; color: var(--light-text-color);">Monitor designated areas for unauthorized drone activity.</p>
+
+        <div class="main-dashboard-grid">
+            <div class="nav-column">
+                <div class="dashboard-panel nav-sidebar-item">
+                    <h3>System Status</h3>
+                    <ul>
+                        <li><span class="status-indicator active"></span>VihangVetri Active</li>
+                        <li><span class="status-indicator online"></span>Zone Status: Configured</li>
+                        <li><span class="status-indicator active"></span>AI Model: YOLOv5 Loaded</li>
+                    </ul>
+                </div>
+
+                <div class="dashboard-panel nav-sidebar-item">
+                    <h3>Alert Status</h3>
+                    <div style="display: flex; justify-content: center; align-items: center; padding: 10px;">
+                        <span class="alert-indicator" id="alertIndicator"></span>
+                        <p style="margin-left: 15px; font-weight: bold; color: var(--text-color);">Drone Alert</p>
+                    </div>
+                    <p style="font-size: 0.8em; text-align: center; color: var(--light-text-color);">Indicator pulses red on drone detection in zone.</p>
+                </div>
+            </div>
+
+            <div class="video-column">
+                <div class="video-area">
+                    <img id="videoFeed" src="{{ url_for('video_feed', feature_name='vihangvetri') }}" alt="Live Video Feed" onerror="this.onerror=null; this.src='{{ url_for('static', filename='uploads/error_placeholder.jpg') }}';">
+                    <div class="video-status-overlay">
+                        Feed Status: <span id="feedStatus">ACTIVE</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls-column">
+                <div class="dashboard-panel controls">
+                    <h2>Video Source & Zone Configuration</h2>
+                    <div class="form-group">
+                        <label for="videoSource">Change Video Source:</label>
+                        <input type="text" id="videoSource" name="videoSource" value="{{ current_source }}" placeholder="e.g., 0 for webcam, path/to/video.mp4">
+                        <small style="color: var(--light-text-color);">Enter '0' for webcam, or a video file path.</small>
+                    </div>
+                    <button class="action-button" onclick="setVideoSource()">Apply Source and Restart</button>
+
+                    <h2 style="margin-top: calc(var(--spacing-unit) * 1.2);">Detection Zone Controls</h2>
+                    <div class="form-group">
+                        <label for="zoneX">Zone X (pixels from left):</label>
+                        <input type="number" id="zoneX" value="{{ initial_zone_x }}" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="zoneY">Zone Y (pixels from top):</label>
+                        <input type="number" id="zoneY" value="{{ initial_zone_y }}" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="zoneWidth">Zone Width (pixels):</label>
+                        <input type="number" id="zoneWidth" value="{{ initial_zone_width }}" min="10">
+                    </div>
+                    <div class="form-group">
+                        <label for="zoneHeight">Zone Height (pixels):</label>
+                        <input type="number" id="zoneHeight" value="{{ initial_zone_height }}" min="10">
+                    </div>
+                    <button class="action-button" onclick="setZone()">Set Zone</button>
+                    <button class="red-button" onclick="resetZone()">Reset Zone</button>
+                </div>
+            </div>
+
+            <div class="dashboard-panel logs-full-width logs-container">
+                <h2>Drone Detection Logs</h2>
+                <div id="logDisplay" class="log-output">
+                    <p>[INFO] VihangVetri loaded. Connecting to log stream...</p>
+                    <!-- Logs will be inserted here by JavaScript -->
+                </div>
+            </div>
+        </div>
+        <a href="{{ url_for('features') }}" class="back-to-features">Back to Features</a>
+    </div>
+
+    <script>
+        // Initialize Socket.IO connection
+        var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const videoSourceInput = document.getElementById('videoSource');
+            const videoFeedImg = document.getElementById('videoFeed');
+            const logDisplay = document.getElementById('logDisplay');
+            const alertIndicator = document.getElementById('alertIndicator');
+            const feedStatus = document.getElementById('feedStatus');
+
+            const zoneXInput = document.getElementById('zoneX');
+            const zoneYInput = document.getElementById('zoneY');
+            const zoneWidthInput = document.getElementById('zoneWidth');
+            const zoneHeightInput = document.getElementById('zoneHeight');
+
+            // --- Control Functions ---
+            window.setVideoSource = function() {
+                const newSource = videoSourceInput.value;
+                fetch('/set_vihangvetri_source', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source: newSource })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // alert('Video source updated. Reloading page to apply changes.');
+                        window.location.reload(); // Reload to restart the stream with new source
+                    } else {
+                        console.error('Error setting video source:', data.message);
+                        alert('Failed to set video source: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch error setting video source:', error);
+                    alert('Communication error: Failed to set video source.');
+                });
+            };
+
+            window.setZone = function() {
+                const x = parseInt(zoneXInput.value);
+                const y = parseInt(zoneYInput.value);
+                const width = parseInt(zoneWidthInput.value);
+                const height = parseInt(zoneHeightInput.value);
+
+                if (isNaN(x) || isNaN(y) || isNaN(width) || isNaN(height) || width < 10 || height < 10) {
+                    alert('Please enter valid numeric values for zone coordinates and dimensions (min width/height 10).');
+                    return;
+                }
+
+                fetch('/set_vihangvetri_zone', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ x: x, y: y, width: width, height: height })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        console.log('Zone updated successfully!');
+                        // No need to reload, the video feed will update automatically
+                    } else {
+                        console.error('Error setting zone:', data.message);
+                        alert('Failed to set zone: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch error setting zone:', error);
+                    alert('Communication error: Failed to set zone.');
+                });
+            };
+
+            window.resetZone = function() {
+                if (confirm('Are you sure you want to reset the zone to default?')) {
+                    fetch('/reset_vihangvetri_zone', { method: 'POST' })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                console.log('Zone reset to default.');
+                                // No need to reload, the video feed will update automatically
+                                // You might want to fetch the new default values to update input fields
+                                // For now, we'll just log success.
+                            } else {
+                                console.error('Error resetting zone:', data.message);
+                            }
+                        })
+                        .catch(error => console.error('Fetch error resetting zone:', error));
+                }
+            };
+
+            // --- Video Feed Status Handling ---
+            videoFeedImg.addEventListener('error', () => {
+                feedStatus.textContent = 'OFFLINE';
+                feedStatus.style.color = 'var(--accent-red)';
+            });
+            videoFeedImg.addEventListener('load', () => {
+                feedStatus.textContent = 'ACTIVE';
+                feedStatus.style.color = 'white';
+            });
+
+
+            // --- SocketIO for Real-time Logs and Alert Status ---
+            socket.on('connect', function() {
+                console.log('Connected to VihangVetri SocketIO!');
+                const initialLogEntry = document.createElement('p');
+                initialLogEntry.textContent = `[${new Date().toLocaleTimeString()}] Connected to live log stream.`;
+                logDisplay.prepend(initialLogEntry);
+            });
+
+            socket.on('vihangvetri_log', function(data) {
+                const newLogEntry = document.createElement('p');
+                newLogEntry.textContent = data.log;
+                logDisplay.prepend(newLogEntry);
+                if (logDisplay.children.length > 100) {
+                    logDisplay.removeChild(logDisplay.lastChild);
+                }
+            });
+
+            socket.on('vihangvetri_alert_status', function(data) {
+                if (data.active) {
+                    alertIndicator.classList.add('active');
+                } else {
+                    alertIndicator.classList.remove('active');
+                }
+            });
+
+            socket.on('disconnect', function() {
+                console.error('Disconnected from VihangVetri SocketIO.');
+                const errorLogEntry = document.createElement('p');
+                errorLogEntry.textContent = `[${new Date().toLocaleTimeString()}] ERROR: Lost connection to log stream.`;
+                logDisplay.prepend(errorLogEntry);
+            });
+        });
+    </script>
+</body>
+</html>

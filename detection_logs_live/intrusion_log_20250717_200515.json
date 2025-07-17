@@ -1,0 +1,218 @@
+[
+  {
+    "timestamp": "2025-07-17T20:05:16.479385",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.59",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200516.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:16.950459",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.48",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200516.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:17.450935",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.66",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200517.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:17.964247",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.52",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200517.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:18.412644",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.38",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200518.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:18.878058",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.45",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200518.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:19.326917",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.44",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200519.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:19.786620",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.37",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200519.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:20.283939",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.44",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200520.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:20.755862",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.57",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200520.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:21.223874",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.62",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200521.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:21.679592",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.62",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200521.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:22.139776",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.64",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200522.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:22.599344",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.65",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200522.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:23.064678",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.63",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200523.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:23.528454",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.62",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200523.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:23.994150",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.59",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200523.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:24.457471",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.59",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200524.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:24.937017",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.57",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200524.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:25.403023",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.35",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200525.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:25.858133",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.37",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200525.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:26.326601",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.45",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200526.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:26.330287",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.29",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200526.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:26.801851",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.53",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200526.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:27.280465",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.40",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200527.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:27.749248",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.47",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200527.jpg"
+  },
+  {
+    "timestamp": "2025-07-17T20:05:28.241298",
+    "zone": "zone2",
+    "object_class": "person",
+    "confidence": "0.61",
+    "zone_scale": "1.00",
+    "snapshot_file": "intrusion_snapshot_20250717_200528.jpg"
+  }
+]

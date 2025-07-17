@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Margadarshi Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <style>
+        body {
+            font-family: "Inter", sans-serif;
+            background-color: #f0f2f5; /* Lighter background for better contrast */
+            color: #2d3748; /* Dark text for contrast */
+        }
+        .container {
+            max-width: 1300px; /* Slightly wider container */
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .card {
+            background-color: #ffffff; /* White card background */
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            cursor: pointer;
+            text-align: center;
+        }
+        .btn-primary {
+            background-color: #4299e1; /* Blue */
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #3182ce;
+        }
+        .btn-secondary {
+            background-color: #cbd5e0; /* Light gray */
+            color: #2d3748; /* Dark text */
+        }
+        .btn-secondary:hover {
+            background-color: #a0aec0;
+        }
+        .btn-danger {
+            background-color: #e53e3e; /* Red */
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #c53030;
+        }
+        .input-field {
+            background-color: #edf2f7; /* Lighter input background */
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            color: #2d3748;
+            width: 100%;
+        }
+        .log-box {
+            background-color: #e2e8f0; /* Light log box background */
+            border: 1px solid #cbd5e0;
+            border-radius: 0.5rem;
+            height: 200px; /* Reduced height for logs */
+            overflow-y: scroll;
+            padding: 1rem;
+            font-size: 0.875rem;
+            color: #4a5568;
+            flex-grow: 1; /* Allow log box to take available height */
+        }
+        .alert-active {
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            padding-top: 56.25%; /* 16:9 Aspect Ratio */
+            background-color: black;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            max-width: 800px; /* Max width for video to make it smaller */
+            margin: 0 auto; /* Center the video */
+        }
+        .video-container img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* Ensure the entire video is visible */
+        }
+        .zone-overlay {
+            position: absolute;
+            border: 2px dashed yellow;
+            pointer-events: none; /* Allow clicks to pass through */
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <div class="container">
+        <nav class="flex justify-between items-center mb-8 py-4 border-b border-gray-200">
+            <h1 class="text-3xl font-extrabold text-blue-700">Margadarshi Dashboard</h1>
+            <div class="space-x-6">
+                <a href="/" class="text-blue-600 hover:text-blue-800 font-medium">Home</a>
+                <a href="/features" class="text-blue-600 hover:text-blue-800 font-medium">Features</a>
+                <a href="/dashboard" class="text-blue-600 hover:text-blue-800 font-medium">Agnidrishti</a>
+                <a href="/forbidden_zone_ids" class="text-blue-600 hover:text-blue-800 font-medium">Simharekha</a>
+                <a href="/vihangvetri_dashboard" class="text-blue-600 hover:text-blue-800 font-medium">VihangVetri</a>
+            </div>
+        </nav>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 flex flex-col space-y-8">
+                <div class="card p-4 flex flex-col items-center justify-center relative" id="videoCard">
+                    <h2 class="text-2xl font-bold mb-4 text-gray-700">Live Feed</h2>
+                    <div class="video-container">
+                        <img id="videoFeed" src="{{ url_for('video_feed', feature_name='margadarshi') }}" alt="Live Video Feed">
+                        <div id="zoneOverlay" class="zone-overlay"></div>
+                    </div>
+                    <div id="alertStatus" class="mt-4 text-xl font-extrabold text-red-600 hidden">
+                        ALERT: RUNWAY NOT CLEAR!
+                    </div>
+                </div>
+
+                <div class="card flex-grow">
+                    <h2 class="text-2xl font-bold mb-4 text-gray-700">Logs</h2>
+                    <div id="logBox" class="log-box">
+                        </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-1 flex flex-col space-y-8">
+                <div class="card">
+                    <h2 class="text-2xl font-bold mb-4 text-gray-700">Configuration</h2>
+                    <form id="configForm" class="space-y-4">
+                        <div>
+                            <label for="ipStreamUrl" class="block text-sm font-medium text-gray-700 mb-1">IP Stream URL / Camera Index (0 for webcam)</label>
+                            <input type="text" id="ipStreamUrl" name="IP_STREAM_URL" value="{{ config.IP_STREAM_URL }}" class="input-field">
+                            <button type="button" id="setSourceBtn" class="btn btn-primary w-full mt-3">Set Source</button>
+                        </div>
+
+                        <div>
+                            <label for="confidenceThreshold" class="block text-sm font-medium text-gray-700 mb-1">Confidence Threshold (0.0-1.0)</label>
+                            <input type="number" step="0.01" min="0" max="1" id="confidenceThreshold" name="CONFIDENCE_THRESHOLD" value="{{ config.CONFIDENCE_THRESHOLD }}" class="input-field">
+                        </div>
+
+                        <div>
+                            <label for="nmsIouThreshold" class="block text-sm font-medium text-gray-700 mb-1">NMS IOU Threshold (0.0-1.0)</label>
+                            <input type="number" step="0.01" min="0" max="1" id="nmsIouThreshold" name="NMS_IOU_THRESHOLD" value="{{ config.NMS_IOU_THRESHOLD }}" class="input-field">
+                        </div>
+
+                        <div>
+                            <label for="logInterval" class="block text-sm font-medium text-gray-700 mb-1">Log Interval (seconds)</label>
+                            <input type="number" step="1" min="1" id="logInterval" name="LOG_INTERVAL_NOT_CLEAR_SEC" value="{{ config.LOG_INTERVAL_NOT_CLEAR_SEC }}" class="input-field">
+                        </div>
+
+                        <div>
+                            <label for="maxPixelDistance" class="block text-sm font-medium text-gray-700 mb-1">Max Pixel Distance for Track</label>
+                            <input type="number" step="1" min="1" id="maxPixelDistance" name="MAX_PIXEL_DISTANCE_FOR_TRACK" value="{{ config.MAX_PIXEL_DISTANCE_FOR_TRACK }}" class="input-field">
+                        </div>
+
+                        <div>
+                            <label for="trackExpiryFrames" class="block text-sm font-medium text-gray-700 mb-1">Track Expiry Frames</label>
+                            <input type="number" step="1" min="1" id="trackExpiryFrames" name="TRACK_EXPIRY_FRAMES" value="{{ config.TRACK_EXPIRY_FRAMES }}" class="input-field">
+                        </div>
+
+                        <div>
+                            <label for="rotationState" class="block text-sm font-medium text-gray-700 mb-1">Rotation State</label>
+                            <select id="rotationState" name="ROTATION_STATE" class="input-field">
+                                <option value="0" {% if config.ROTATION_STATE == 0 %}selected{% endif %}>0 degrees</option>
+                                <option value="1" {% if config.ROTATION_STATE == 1 %}selected{% endif %}>90 degrees clockwise</option>
+                                <option value="2" {% if config.ROTATION_STATE == 2 %}selected{% endif %}>180 degrees</option>
+                                <option value="3" {% if config.ROTATION_STATE == 3 %}selected{% endif %}>270 degrees clockwise</option>
+                            </select>
+                        </div>
+
+                        <div class="flex items-center space-x-3">
+                            <input type="checkbox" id="irMode" name="IR_MODE" {% if config.IR_MODE %}checked{% endif %} class="form-checkbox h-5 w-5 text-blue-600 rounded">
+                            <label for="irMode" class="text-sm font-medium text-gray-700">Enable IR Mode</label>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <input type="checkbox" id="voiceAlertsEnabled" name="VOICE_ALERTS_ENABLED" {% if config.VOICE_ALERTS_ENABLED %}checked{% endif %} class="form-checkbox h-5 w-5 text-blue-600 rounded">
+                            <label for="voiceAlertsEnabled" class="text-sm font-medium text-gray-700">Enable Voice Alerts</label>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <input type="checkbox" id="visualAlertsEnabled" name="VISUAL_ALERT_ENABLED" {% if config.VISUAL_ALERT_ENABLED %}checked{% endif %} class="form-checkbox h-5 w-5 text-blue-600 rounded">
+                            <label for="visualAlertsEnabled" class="text-sm font-medium text-gray-700">Enable Visual Alerts</label>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <input type="checkbox" id="autoScreenshotEnabled" name="AUTO_SCREENSHOT_ENABLED" {% if config.AUTO_SCREENSHOT_ENABLED %}checked{% endif %} class="form-checkbox h-5 w-5 text-blue-600 rounded">
+                            <label for="autoScreenshotEnabled" class="text-sm font-medium text-gray-700">Enable Auto Screenshots</label>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <input type="checkbox" id="alertSoundEnabled" name="ALERT_SOUND_ENABLED" {% if config.ALERT_SOUND_ENABLED %}checked{% endif %} class="form-checkbox h-5 w-5 text-blue-600 rounded">
+                            <label for="alertSoundEnabled" class="text-sm font-medium text-gray-700">Enable Alert Sound</label>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-full mt-4">Update Configuration</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2 class="text-2xl font-bold mb-4 text-gray-700">Runway Zone Adjustment</h2>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="zoneTlX" class="block text-sm font-medium text-gray-700 mb-1">Top-Left X (Prop.)</label>
+                                <input type="number" step="0.01" min="0" max="1" id="zoneTlX" value="{{ '%.2f' % config.ZONE_PROPORTIONAL_TOP_LEFT[0] }}" class="input-field">
+                            </div>
+                            <div>
+                                <label for="zoneTlY" class="block text-sm font-medium text-gray-700 mb-1">Top-Left Y (Prop.)</label>
+                                <input type="number" step="0.01" min="0" max="1" id="zoneTlY" value="{{ '%.2f' % config.ZONE_PROPORTIONAL_TOP_LEFT[1] }}" class="input-field">
+                            </div>
+                            <div>
+                                <label for="zoneBrX" class="block text-sm font-medium text-gray-700 mb-1">Bottom-Right X (Prop.)</label>
+                                <input type="number" step="0.01" min="0" max="1" id="zoneBrX" value="{{ '%.2f' % config.ZONE_PROPORTIONAL_BOTTOM_RIGHT[0] }}" class="input-field">
+                            </div>
+                            <div>
+                                <label for="zoneBrY" class="block text-sm font-medium text-gray-700 mb-1">Bottom-Right Y (Prop.)</label>
+                                <input type="number" step="0.01" min="0" max="1" id="zoneBrY" value="{{ '%.2f' % config.ZONE_PROPORTIONAL_BOTTOM_RIGHT[1] }}" class="input-field">
+                            </div>
+                        </div>
+                        <button type="button" id="setZoneProportionalBtn" class="btn btn-primary w-full">Set Proportional Zone</button>
+                        <button type="button" id="resetZoneBtn" class="btn btn-secondary w-full mt-2">Reset Zone to Default</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const logBox = document.getElementById('logBox');
+        const videoFeed = document.getElementById('videoFeed');
+        const alertStatus = document.getElementById('alertStatus');
+        const videoCard = document.getElementById('videoCard');
+        const zoneOverlay = document.getElementById('zoneOverlay');
+
+        // These values should ideally be fetched dynamically or passed from the server
+        // after the video feed's natural dimensions are known. For now, using placeholders.
+        let initialZoneX = {{ initial_zone_x }};
+        let initialZoneY = {{ initial_zone_y }};
+        let initialZoneWidth = {{ initial_zone_width }};
+        let initialZoneHeight = {{ initial_zone_height }};
+
+        // Function to update the zone overlay
+        function updateZoneOverlay() {
+            const videoRect = videoFeed.getBoundingClientRect();
+            const videoNaturalWidth = videoFeed.naturalWidth;
+            const videoNaturalHeight = videoFeed.naturalHeight;
+
+            if (videoNaturalWidth === 0 || videoNaturalHeight === 0) {
+                // If natural dimensions aren't loaded yet, try again after a short delay
+                setTimeout(updateZoneOverlay, 100);
+                return;
+            }
+
+            // Calculate current video display dimensions, considering object-fit: contain
+            const videoAspectRatio = videoNaturalWidth / videoNaturalHeight;
+            const containerAspectRatio = videoRect.width / videoRect.height;
+
+            let currentVideoDisplayWidth, currentVideoDisplayHeight;
+            let currentVideoDisplayXOffset, currentVideoDisplayYOffset;
+
+            if (videoAspectRatio > containerAspectRatio) {
+                // Video is wider than container, height is constrained
+                currentVideoDisplayWidth = videoRect.width;
+                currentVideoDisplayHeight = videoRect.width / videoAspectRatio;
+                currentVideoDisplayXOffset = 0;
+                currentVideoDisplayYOffset = (videoRect.height - currentVideoDisplayHeight) / 2;
+            } else {
+                // Video is taller than container, width is constrained
+                currentVideoDisplayWidth = videoRect.height * videoAspectRatio;
+                currentVideoDisplayHeight = videoRect.height;
+                currentVideoDisplayXOffset = (videoRect.width - currentVideoDisplayWidth) / 2;
+                currentVideoDisplayYOffset = 0;
+            }
+
+            // Scale initial pixel coordinates to current display size
+            const scaleX = currentVideoDisplayWidth / videoNaturalWidth;
+            const scaleY = currentVideoDisplayHeight / videoNaturalHeight;
+
+            const overlayX = initialZoneX * scaleX + currentVideoDisplayXOffset;
+            const overlayY = initialZoneY * scaleY + currentVideoDisplayYOffset;
+            const overlayWidth = initialZoneWidth * scaleX;
+            const overlayHeight = initialZoneHeight * scaleY;
+
+            zoneOverlay.style.left = `${overlayX}px`;
+            zoneOverlay.style.top = `${overlayY}px`;
+            zoneOverlay.style.width = `${overlayWidth}px`;
+            zoneOverlay.style.height = `${overlayHeight}px`;
+            zoneOverlay.style.display = 'block'; // Ensure it's visible
+        }
+
+        // Initial update and update on video load/resize
+        videoFeed.onload = updateZoneOverlay;
+        window.onresize = updateZoneOverlay;
+
+        // SocketIO event listeners
+        socket.on('connect', () => {
+            console.log('Connected to SocketIO server');
+        });
+
+        socket.on('margadarshi_log', (data) => {
+            const p = document.createElement('p');
+            p.textContent = data.log;
+            logBox.appendChild(p);
+            logBox.scrollTop = logBox.scrollHeight; // Auto-scroll to bottom
+        });
+
+        socket.on('margadarshi_alert_status', (data) => {
+            if (data.active) {
+                alertStatus.classList.remove('hidden');
+                videoCard.classList.add('alert-active');
+            } else {
+                alertStatus.classList.add('hidden');
+                videoCard.classList.remove('alert-active');
+            }
+        });
+
+        // Form submission for configuration updates
+        document.getElementById('configForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const config = {};
+            for (const [key, value] of formData.entries()) {
+                // Handle checkboxes separately, as unchecked checkboxes are not included in FormData
+                if (key === 'VOICE_ALERTS_ENABLED' || key === 'VISUAL_ALERT_ENABLED' || key === 'AUTO_SCREENSHOT_ENABLED' || key === 'ALERT_SOUND_ENABLED' || key === 'IR_MODE') {
+                    config[key] = true; // If present, it's checked
+                } else {
+                    config[key] = value;
+                }
+            }
+            // Add unchecked checkboxes explicitly as false
+            ['VOICE_ALERTS_ENABLED', 'VISUAL_ALERT_ENABLED', 'AUTO_SCREENSHOT_ENABLED', 'ALERT_SOUND_ENABLED', 'IR_MODE'].forEach(key => {
+                if (!formData.has(key)) {
+                    config[key] = false;
+                }
+            });
+
+            // Convert numerical inputs to appropriate types
+            config.CONFIDENCE_THRESHOLD = parseFloat(config.CONFIDENCE_THRESHOLD);
+            config.NMS_IOU_THRESHOLD = parseFloat(config.NMS_IOU_THRESHOLD);
+            config.LOG_INTERVAL_NOT_CLEAR_SEC = parseInt(config.LOG_INTERVAL_NOT_CLEAR_SEC);
+            config.MAX_PIXEL_DISTANCE_FOR_TRACK = parseInt(config.MAX_PIXEL_DISTANCE_FOR_TRACK);
+            config.TRACK_EXPIRY_FRAMES = parseInt(config.TRACK_EXPIRY_FRAMES);
+            config.ROTATION_STATE = parseInt(config.ROTATION_STATE);
+
+            try {
+                const response = await fetch('/update_margadarshi_config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(config)
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    alert('Configuration updated successfully!');
+                    // Optionally, update the displayed config values if they were normalized/changed by backend
+                    // For now, we rely on the backend to update itself.
+                } else {
+                    alert('Error updating configuration: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while updating configuration.');
+            }
+        });
+
+        // Set Source Button
+        document.getElementById('setSourceBtn').addEventListener('click', async () => {
+            const newSource = document.getElementById('ipStreamUrl').value;
+            try {
+                const response = await fetch('/set_margadarshi_source', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ source: newSource })
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    alert(result.message);
+                    // Reload the video feed to apply new source
+                    videoFeed.src = "{{ url_for('video_feed', feature_name='margadarshi') }}?" + new Date().getTime();
+                } else {
+                    alert('Error setting source: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while setting the source.');
+            }
+        });
+
+        // Set Proportional Zone Button
+        document.getElementById('setZoneProportionalBtn').addEventListener('click', async () => {
+            const tl_x_prop = parseFloat(document.getElementById('zoneTlX').value);
+            const tl_y_prop = parseFloat(document.getElementById('zoneTlY').value);
+            const br_x_prop = parseFloat(document.getElementById('zoneBrX').value);
+            const br_y_prop = parseFloat(document.getElementById('zoneBrY').value);
+
+            if (isNaN(tl_x_prop) || isNaN(tl_y_prop) || isNaN(br_x_prop) || isNaN(br_y_prop)) {
+                alert('Please enter valid numerical values for all zone coordinates.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/set_margadarshi_zone_proportional', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        tl_x_prop: tl_x_prop,
+                        tl_y_prop: tl_y_prop,
+                        br_x_prop: br_x_prop,
+                        br_y_prop: br_y_prop
+                    })
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    alert('Zone updated successfully!');
+                    // For immediate visual feedback, ideally the backend would send back the pixel coordinates
+                    // based on the *current* video frame's dimensions, but if not available, a refresh
+                    // of the video feed or re-calculating here is necessary.
+                    // For now, we'll re-fetch the video to trigger an update.
+                    videoFeed.src = "{{ url_for('video_feed', feature_name='margadarshi') }}?" + new Date().getTime();
+                } else {
+                    alert('Error updating zone: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while updating the zone.');
+            }
+        });
+
+        // Reset Zone Button
+        document.getElementById('resetZoneBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/reset_margadarshi_zone', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    alert('Zone reset to default!');
+                    // Update input fields with default proportional values
+                    document.getElementById('zoneTlX').value = ({{ '%.2f' % config.ZONE_PROPORTIONAL_TOP_LEFT[0] }});
+                    document.getElementById('zoneTlY').value = ({{ '%.2f' % config.ZONE_PROPORTIONAL_TOP_LEFT[1] }});
+                    document.getElementById('zoneBrX').value = ({{ '%.2f' % config.ZONE_PROPORTIONAL_BOTTOM_RIGHT[0] }});
+                    document.getElementById('zoneBrY').value = ({{ '%.2f' % config.ZONE_PROPORTIONAL_BOTTOM_RIGHT[1] }});
+                    // Force re-draw of the overlay
+                    videoFeed.src = "{{ url_for('video_feed', feature_name='margadarshi') }}?" + new Date().getTime();
+                } else {
+                    alert('Error resetting zone: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while resetting the zone.');
+            }
+        });
+
+        // Call updateZoneOverlay initially after the video feed potentially loads
+        // A small delay might be necessary if the image takes time to load its natural dimensions
+        setTimeout(updateZoneOverlay, 500); // Give video feed a moment to load
+    </script>
+</body>
+</html>
