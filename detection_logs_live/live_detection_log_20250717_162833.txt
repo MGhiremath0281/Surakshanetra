@@ -1,0 +1,14 @@
+--- Live Detection Log Started: 2025-07-17 16:28:33 ---
+Camera Source: 0
+Base Model: yolov8x.pt
+Fire Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-17 16:28:33.314] Logging to: detection_logs_live\live_detection_log_20250717_162833.txt
+[2025-07-17 16:28:33.481] ✅ Base model loaded successfully.
+[2025-07-17 16:28:33.538] ✅ Fire model loaded successfully.
+[2025-07-17 16:28:34.093] Starting live detection stream for source: 0 with rotation=0 and IR_Mode=False
+[2025-07-17 16:28:34.611] Error playing sound static\human_alert.mp3 with pydub: [WinError 2] The system cannot find the file specified. Ensure FFmpeg is installed and in PATH, and PyAudio/SimpleAudio is installed, and the audio file is a valid MP3/WAV.
+[2025-07-17 16:28:34.622] Sound alert triggered: HUMAN
+[2025-07-17 16:28:35.807] Failed to grab frame or end of video stream. Stopping stream.
+------------------------------------------------------------
+--- Live Detection Stream Ended: 2025-07-17 16:28:35 ---

@@ -1,0 +1,7 @@
+--- Live Detection Log Started: 2025-07-17 16:25:44 ---
+Camera Source: 0
+Base Model: yolov8x.pt
+Fire Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-17 16:25:44.391] Logging to: detection_logs_live\live_detection_log_20250717_162544.txt
+[2025-07-17 16:25:44.629] CRITICAL ERROR: Failed to open camera/video source '0'. Invalid camera source or access denied.

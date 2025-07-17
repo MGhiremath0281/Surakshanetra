@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SurakshaNethra - Configure Stream</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .container {
+            margin-top: 50px;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .card {
+            box-shadow: 0 4px 8px rgba(0,0,0,.1);
+            border-radius: .5rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <a class="navbar-brand" href="{{ url_for('index') }}">SurakshaNethra</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('index') }}">Home</a>
+                </li>
+                <li class="nav-item active">
+                    <a class="nav-link" href="{{ url_for('configure_stream') }}">Start Monitoring <span class="sr-only">(current)</span></a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h2 class="mb-4">Configure Video Stream</h2>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="card p-4">
+            <form action="{{ url_for('configure_stream') }}" method="POST">
+                <div class="form-group">
+                    <label for="source_type">Select Video Source:</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="source_type" id="webcamRadio" value="webcam" checked>
+                        <label class="form-check-label" for="webcamRadio">
+                            Webcam (Default: 0)
+                        </label>
+                        <input type="number" class="form-control mt-2" id="webcam_index" name="webcam_index" placeholder="Webcam Index (e.g., 0, 1)" value="0">
+                    </div>
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="radio" name="source_type" id="videoFileRadio" value="video_file">
+                        <label class="form-check-label" for="videoFileRadio">
+                            Local Video File
+                        </label>
+                        <input type="text" class="form-control mt-2" id="video_file_path" name="video_file_path" placeholder="e.g., C:/videos/my_clip.mp4" disabled>
+                    </div>
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="radio" name="source_type" id="ipCameraRadio" value="ip_camera">
+                        <label class="form-check-label" for="ipCameraRadio">
+                            IP Camera (RTSP/HTTP Stream)
+                        </label>
+                        <input type="text" class="form-control mt-2" id="ip_camera_url" name="ip_camera_url" placeholder="e.g., rtsp://user:pass@192.168.1.100:554/stream" disabled>
+                    </div>
+                </div>
+
+                <div class="form-group mt-4">
+                    <label for="rotation">Video Rotation:</label>
+                    <select class="form-control" id="rotation" name="rotation">
+                        <option value="0">0 degrees (No Rotation)</option>
+                        <option value="90">90 degrees Clockwise</option>
+                        <option value="180">180 degrees</option>
+                        <option value="270">270 degrees Clockwise</option>
+                    </select>
+                </div>
+
+                <div class="form-group form-check mt-3">
+                    <input type="checkbox" class="form-check-input" id="ir_mode" name="ir_mode">
+                    <label class="form-check-label" for="ir_mode">Enable IR Mode (Infrared-like colorization)</label>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg btn-block mt-4">Start Live Monitoring</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        // JavaScript to enable/disable input fields based on radio selection
+        document.addEventListener('DOMContentLoaded', function() {
+            const webcamRadio = document.getElementById('webcamRadio');
+            const videoFileRadio = document.getElementById('videoFileRadio');
+            const ipCameraRadio = document.getElementById('ipCameraRadio');
+
+            const webcamIndexInput = document.getElementById('webcam_index');
+            const videoFilePathInput = document.getElementById('video_file_path');
+            const ipCameraUrlInput = document.getElementById('ip_camera_url');
+
+            function updateInputStates() {
+                webcamIndexInput.disabled = !webcamRadio.checked;
+                videoFilePathInput.disabled = !videoFileRadio.checked;
+                ipCameraUrlInput.disabled = !ipCameraRadio.checked;
+            }
+
+            // Initial state
+            updateInputStates();
+
+            // Add event listeners
+            webcamRadio.addEventListener('change', updateInputStates);
+            videoFileRadio.addEventListener('change', updateInputStates);
+            ipCameraRadio.addEventListener('change', updateInputStates);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+--- Live Detection Log Started: 2025-07-17 16:17:38 ---
+Camera Source: 0
+Base Model: yolov8x.pt
+Fire Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-17 16:17:38.158] Logging to: detection_logs_live\live_detection_log_20250717_161738.txt
+[2025-07-17 16:17:40.989] Starting live detection stream for source: 0 with rotation=0 and IR_Mode=False
+[2025-07-17 16:17:44.448] Error playing sound static\human_alert.mp3 with pydub: [WinError 2] The system cannot find the file specified. Ensure FFmpeg is installed and in PATH, and PyAudio/SimpleAudio is installed, and the audio file is a valid MP3/WAV.
+[2025-07-17 16:17:44.448] Sound alert triggered: HUMAN
+[2025-07-17 16:17:50.064] Error playing sound static\human_alert.mp3 with pydub: [WinError 2] The system cannot find the file specified. Ensure FFmpeg is installed and in PATH, and PyAudio/SimpleAudio is installed, and the audio file is a valid MP3/WAV.
+[2025-07-17 16:17:50.064] Sound alert triggered: HUMAN
+[2025-07-17 16:17:55.522] Error playing sound static\human_alert.mp3 with pydub: [WinError 2] The system cannot find the file specified. Ensure FFmpeg is installed and in PATH, and PyAudio/SimpleAudio is installed, and the audio file is a valid MP3/WAV.
+[2025-07-17 16:17:55.522] Sound alert triggered: HUMAN
+[2025-07-17 16:18:01.054] Error playing sound static\human_alert.mp3 with pydub: [WinError 2] The system cannot find the file specified. Ensure FFmpeg is installed and in PATH, and PyAudio/SimpleAudio is installed, and the audio file is a valid MP3/WAV.
+[2025-07-17 16:18:01.054] Sound alert triggered: HUMAN
+[2025-07-17 16:18:06.348] Error playing sound static\human_alert.mp3 with pydub: [WinError 2] The system cannot find the file specified. Ensure FFmpeg is installed and in PATH, and PyAudio/SimpleAudio is installed, and the audio file is a valid MP3/WAV.
+[2025-07-17 16:18:06.348] Sound alert triggered: HUMAN

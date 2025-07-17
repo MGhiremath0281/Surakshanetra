@@ -1,0 +1,13 @@
+--- Live Detection Log Started: 2025-07-17 16:29:53 ---
+Camera Source: 0
+Base Model: yolov8x.pt
+Fire Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-17 16:29:53.891] Logging to: detection_logs_live\live_detection_log_20250717_162953.txt
+[2025-07-17 16:29:54.097] ✅ Base model loaded successfully.
+[2025-07-17 16:29:54.168] ✅ Fire model loaded successfully.
+[2025-07-17 16:29:56.662] Starting live detection stream for source: 0 with rotation=0 and IR_Mode=True
+[2025-07-17 16:29:59.983] Error playing sound static\fire_alert.mp3 with pydub: [WinError 2] The system cannot find the file specified. Ensure FFmpeg is installed and in PATH, and PyAudio/SimpleAudio is installed, and the audio file is a valid MP3/WAV.
+[2025-07-17 16:29:59.983] Sound alert triggered: FIRE
+[2025-07-17 16:30:05.572] Error playing sound static\fire_alert.mp3 with pydub: [WinError 2] The system cannot find the file specified. Ensure FFmpeg is installed and in PATH, and PyAudio/SimpleAudio is installed, and the audio file is a valid MP3/WAV.
+[2025-07-17 16:30:05.572] Sound alert triggered: FIRE

@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SurakshaNethra - Live AI Monitoring Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* CSS Variables for a Lighter Theme */
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #0056b3;
+            --accent-green: #28a745;
+            --accent-red: #dc3545;
+            --background-color: #f8f9fa; /* Very light background */
+            --container-bg: #ffffff;
+            --panel-bg: #fdfefe; /* White for panels */
+            --border-color: #e0e6eb; /* Light border */
+            --text-color: #343a40; /* Dark gray for text */
+            --light-text-color: #6c757d;
+            --header-color: #212529;
+            --border-radius: 8px;
+            --spacing-unit: 20px;
+            --box-shadow-light: 0 4px 15px rgba(0,0,0,0.08);
+            --box-shadow-panel: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        /* Universal box-sizing for consistent layout calculations */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            margin: 0;
+            padding: var(--spacing-unit);
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        /* Main container for the entire application content */
+        .app-container {
+            max-width: 1600px; /* Wider for new layout */
+            margin: 0 auto;
+            background: var(--container-bg);
+            padding: calc(var(--spacing-unit) * 1.5);
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow-light);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-unit);
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary-color);
+            margin-bottom: var(--spacing-unit);
+            padding-bottom: calc(var(--spacing-unit) / 2);
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5em;
+            font-weight: 700;
+        }
+
+        h2 {
+            color: var(--header-color);
+            margin-top: 0;
+            margin-bottom: calc(var(--spacing-unit) / 1.5);
+            font-size: 1.6em;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        /* NEW: Main Dashboard Grid Layout */
+        .main-dashboard-grid {
+            display: grid;
+            grid-template-columns: 0.8fr 2fr 1fr; /* Left Nav | Video | Right Sidebar */
+            grid-template-rows: auto auto; /* Top row for elements, bottom for logs */
+            gap: var(--spacing-unit);
+            align-items: start; /* Align content to the top */
+        }
+
+        /* Grid Areas Definition */
+        .nav-column {
+            grid-column: 1 / 2;
+            grid-row: 1 / 2;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-unit);
+        }
+
+        .video-column {
+            grid-column: 2 / 3;
+            grid-row: 1 / 2;
+        }
+
+        .controls-column {
+            grid-column: 3 / 4;
+            grid-row: 1 / 2;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-unit);
+        }
+
+        .logs-full-width {
+            grid-column: 1 / -1; /* Spans across all columns */
+            grid-row: 2 / 3;
+        }
+
+        /* Individual Dashboard Panels */
+        .dashboard-panel {
+            background: var(--panel-bg);
+            padding: var(--spacing-unit);
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow-panel);
+            border: 1px solid var(--border-color);
+            width: 100%;
+        }
+
+        /* Left Navigation Sidebar Styling */
+        .nav-sidebar-item {
+            padding: calc(var(--spacing-unit) * 0.8);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            background-color: var(--panel-bg);
+            box-shadow: var(--box-shadow-panel);
+            margin-bottom: var(--spacing-unit);
+        }
+        .nav-sidebar-item h3 {
+            color: var(--primary-color);
+            font-size: 1.2em;
+            margin-top: 0;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+        }
+        .nav-sidebar-item ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .nav-sidebar-item ul li {
+            padding: 8px 0;
+            border-bottom: 1px dashed rgba(0,0,0,0.08);
+            color: var(--light-text-color);
+        }
+        .nav-sidebar-item ul li:last-child {
+            border-bottom: none;
+        }
+        .nav-sidebar-item .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background-color: grey; /* Default */
+        }
+        .nav-sidebar-item .status-indicator.online { background-color: var(--accent-green); }
+        .nav-sidebar-item .status-indicator.offline { background-color: var(--accent-red); }
+        .nav-sidebar-item .status-indicator.active { background-color: var(--primary-color); }
+
+
+        /* Video Area Styling */
+        .video-area {
+            background-color: #000;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 550px; /* Adjusted height for better balance */
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: relative; /* For status overlay */
+        }
+        .video-area img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            object-fit: contain;
+        }
+        .video-status-overlay {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            font-family: 'Roboto Mono', monospace; /* More technical feel for overlay */
+        }
+
+        /* Current Config panel (now in right sidebar) */
+        .current-config {
+            background-color: #e9f5ff; /* Light blue for info panel */
+            border: 1px dashed #b3d9ff;
+            font-size: 0.95em;
+        }
+        .current-config p {
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 5px;
+            border-bottom: 1px dotted rgba(0,0,0,0.1);
+        }
+        .current-config p:last-child {
+            margin-bottom: 0;
+            border-bottom: none;
+        }
+        .current-config strong {
+            color: var(--secondary-color);
+            font-weight: 600;
+        }
+        #currentIrStatus {
+            font-weight: bold;
+            color: var(--accent-green);
+        }
+        #currentIrStatus.is-off {
+            color: var(--accent-red);
+        }
+
+
+        /* Styling for forms and inputs */
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--light-text-color);
+        }
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            font-size: 1em;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            background-color: #fff;
+        }
+        .form-group input[type="text"]:focus,
+        .form-group input[type="number"]:focus,
+        .form-group select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+            outline: none;
+        }
+        .form-group input[type="checkbox"] {
+            margin-right: 8px;
+        }
+
+
+        /* Buttons styling */
+        .controls button {
+            padding: 12px 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.05em;
+            margin-top: 15px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            width: 100%;
+        }
+        .controls button:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-1px);
+        }
+        .controls button:active {
+            transform: translateY(0);
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+        }
+        #irToggleButton {
+            background-color: var(--accent-green);
+        }
+        #irToggleButton:hover {
+            background-color: #218838;
+        }
+        #irToggleButton.is-off {
+            background-color: var(--accent-red);
+        }
+        #irToggleButton.is-off:hover {
+            background-color: #c82333;
+        }
+
+
+        /* Logs Container Specific Styling */
+        .logs-container {
+            max-height: 350px; /* Fixed height for log area */
+            overflow-y: auto; /* Enable vertical scrolling */
+            background-color: #e9edf1; /* Light background for logs */
+            border: 1px solid var(--border-color);
+            font-size: 0.85em;
+            padding: 0; /* Removed padding here, moved to .log-output */
+        }
+        .logs-container h2 {
+            margin-bottom: 0; /* Reduced margin to stick to log output */
+            padding: 10px; /* Align with log output padding */
+            background-color: #e0e6eb; /* Slightly darker header for logs */
+            border-bottom: 1px solid var(--border-color);
+            border-top-left-radius: var(--border-radius); /* Rounded corners for header */
+            border-top-right-radius: var(--border-radius);
+        }
+        .log-output { /* Style for the actual log display div */
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Roboto Mono', monospace; /* Monospace for logs */
+            font-size: 0.9em;
+            margin: 0;
+            padding: 10px; /* Padding inside the log display div */
+            color: var(--text-color);
+        }
+        .log-output p { /* Style for individual log lines */
+            margin: 0;
+            padding: 2px 0;
+            border-bottom: 1px dotted rgba(0,0,0,0.1); /* Subtle separator */
+        }
+        .log-output p:last-child {
+            border-bottom: none;
+        }
+
+
+        /* Responsive Design using Media Queries */
+
+        /* For screens smaller than 1400px (adjust grid) */
+        @media (max-width: 1400px) {
+            .main-dashboard-grid {
+                grid-template-columns: 1fr 1.5fr; /* Nav-Video | Controls stacked */
+                grid-template-rows: auto auto auto; /* Nav, Video, Controls, Logs */
+            }
+            .nav-column {
+                grid-column: 1 / 2;
+                grid-row: 1 / 2;
+            }
+            .video-column {
+                grid-column: 2 / 3;
+                grid-row: 1 / 2;
+                min-height: 480px;
+            }
+            .controls-column {
+                grid-column: 1 / -1; /* Controls span full width below video/nav */
+                grid-row: 2 / 3;
+            }
+            .logs-full-width {
+                grid-column: 1 / -1;
+                grid-row: 3 / 4;
+            }
+        }
+
+        /* For screens smaller than 992px (stack everything) */
+        @media (max-width: 992px) {
+            .main-dashboard-grid {
+                grid-template-columns: 1fr; /* Single column layout */
+                grid-template-rows: auto; /* Auto rows */
+            }
+            .nav-column,
+            .video-column,
+            .controls-column,
+            .logs-full-width {
+                grid-column: 1 / -1; /* All span full width */
+                grid-row: auto; /* Stack naturally */
+            }
+            .video-area {
+                min-height: 400px;
+            }
+            .logs-container {
+                max-height: 300px;
+            }
+        }
+
+        /* For screens smaller than 768px */
+        @media (max-width: 768px) {
+            body {
+                padding: calc(var(--spacing-unit) / 1.5);
+            }
+            .app-container {
+                padding: var(--spacing-unit);
+            }
+            h1 {
+                font-size: 2em;
+            }
+            h2 {
+                font-size: 1.4em;
+            }
+            .video-area {
+                min-height: 300px;
+            }
+            .dashboard-panel {
+                padding: calc(var(--spacing-unit) * 0.75);
+            }
+            .controls button {
+                padding: 10px 15px;
+                font-size: 1em;
+            }
+            .logs-container {
+                max-height: 250px;
+            }
+        }
+
+        /* For very small screens (e.g., mobile phones) */
+        @media (max-width: 480px) {
+            body {
+                padding: calc(var(--spacing-unit) / 2);
+            }
+            .app-container {
+                padding: calc(var(--spacing-unit) / 1.2);
+                border-radius: 5px;
+                box-shadow: none;
+            }
+            h1 {
+                font-size: 1.8em;
+                margin-bottom: calc(var(--spacing-unit) / 1.5);
+            }
+            .video-area {
+                min-height: 220px;
+            }
+            .form-group input[type="text"],
+            .form-group input[type="number"],
+            .form-group select {
+                padding: 8px;
+                font-size: 0.9em;
+            }
+            .logs-container {
+                max-height: 180px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <h1>SurakshaNethra - Live AI Monitoring Dashboard</h1>
+        <p style="text-align: center; color: var(--light-text-color);">Current Time in Bengaluru, India: {{ now.strftime('%Y-%m-%d %H:%M:%S %Z') }}</p>
+
+        <div class="main-dashboard-grid">
+            <div class="nav-column">
+                <div class="dashboard-panel nav-sidebar-item">
+                    <h3>Online Sources</h3>
+                    <ul>
+                        <li><span class="status-indicator online"></span>Camera 1 (Webcam)</li>
+                        <li><span class="status-indicator offline"></span>IP Cam (RTSP-01)</li>
+                        <li><span class="status-indicator active"></span>Drone Feed (Active)</li>
+                        <li><span class="status-indicator online"></span>Local Video Files</li>
+                    </ul>
+                </div>
+
+                <div class="dashboard-panel nav-sidebar-item">
+                    <h3>System Status</h3>
+                    <ul>
+                        <li>Processing: <span class="status-indicator active"></span>Active</li>
+                        <li>Storage: <span class="status-indicator online"></span>92% Available</li>
+                        <li>Network: <span class="status-indicator online"></span>Stable (Low Latency)</li>
+                        <li>AI Model: <span class="status-indicator active"></span>V 3.1.2 Loaded</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="video-column">
+                <div class="video-area">
+                    <img src="{{ url_for('video_feed') }}" alt="Live Video Feed" onerror="this.onerror=null; this.src='{{ url_for('static', filename='error_placeholder.jpg') }}';">
+                    <div class="video-status-overlay">
+                        Live Feed Status: <span id="feedStatus">ACTIVE</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls-column">
+                <div class="dashboard-panel current-config">
+                    <h2>Current Stream Configuration:</h2>
+                    <p><strong>Camera Source:</strong> <span>{{ config['camera_source'] }}</span></p>
+                    <p><strong>Rotation Angle:</strong> <span>{{ config['rotation_angle'] }} degrees</span></p>
+                    <p><strong>IR Mode:</strong> <span id="currentIrStatus" class="{{ 'is-off' if not config['ir_mode'] else '' }}">{{ 'ON' if config['ir_mode'] else 'OFF' }}</span></p>
+                    <p><strong>Voice Alerts:</strong> <span>{{ 'Enabled' if config['voice_alerts_enabled'] else 'Disabled' }}</span></p>
+                    <p><strong>Voice Gender:</strong> <span>{{ config['voice_gender'].capitalize() }}</span></p>
+                    <p><strong>Cooldown:</strong> <span>{{ config['detection_cooldown_seconds'] }} sec</span></p>
+                </div>
+
+                <div class="dashboard-panel controls">
+                    <h2>Configure Stream</h2>
+                    <form action="/configure_stream" method="post">
+                        <div class="form-group">
+                            <label for="camera_source_input">Camera Source (0 for webcam, path for video, rtsp:// for IP camera):</label>
+                            <input type="text" id="camera_source_input" name="camera_source_input" value="{{ config['camera_source'] }}">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="rotation_angle">Rotation Angle:</label>
+                            <select id="rotation_angle" name="rotation_angle">
+                                <option value="0" {% if config['rotation_angle'] == 0 %}selected{% endif %}>0 degrees</option>
+                                <option value="90" {% if config['rotation_angle'] == 90 %}selected{% endif %}>90 degrees (Clockwise)</option>
+                                <option value="180" {% if config['rotation_angle'] == 180 %}selected{% endif %}>180 degrees</option>
+                                <option value="270" {% if config['rotation_angle'] == 270 %}selected{% endif %}>270 degrees (Counter-clockwise)</option>
+                            </select>
+                        </div>
+
+                        <h3>Alert Settings</h3>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="voice_alerts_enabled" {{ 'checked' if config['voice_alerts_enabled'] else '' }}>
+                                Enable Voice Alerts (on server)
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="voice_gender">Voice Gender:</label>
+                            <select id="voice_gender" name="voice_gender">
+                                <option value="male" {{ 'selected' if config['voice_gender'] == 'male' else '' }}>Male</option>
+                                <option value="female" {{ 'selected' if config['voice_gender'] == 'female' else '' }}>Female</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="detection_cooldown_seconds">Detection Alert Cooldown (seconds):</label>
+                            <input type="number" id="detection_cooldown_seconds" name="detection_cooldown_seconds" value="{{ config['detection_cooldown_seconds'] }}" min="1" max="300">
+                            <small style="color: var(--light-text-color);">Minimum time between consecutive voice alerts.</small>
+                        </div>
+
+                        <button type="submit">Apply Settings and Restart Stream</button>
+                    </form>
+
+                    <h2 style="margin-top: calc(var(--spacing-unit) * 1.2);">IR Mode Control</h2>
+                    <button id="irToggleButton" class="{{ 'is-off' if not config['ir_mode'] else '' }}">Toggle IR Mode</button>
+                </div>
+            </div>
+
+            <div class="dashboard-panel logs-full-width logs-container">
+                <h2>Real-time Server Logs</h2>
+                <div id="log-display" class="log-output">
+                    <p>[INFO] {{ now.strftime('%Y-%m-%d %H:%M:%S %Z') }} - Dashboard loaded. Connecting to log stream...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const irToggleButton = document.getElementById('irToggleButton');
+            const currentIrStatus = document.getElementById('currentIrStatus');
+            const feedStatus = document.getElementById('feedStatus');
+            const logDisplay = document.getElementById('log-display'); // Get the log display div
+
+            // Set initial state class for IR button and status
+            if (currentIrStatus.textContent.trim() === 'OFF') {
+                currentIrStatus.classList.add('is-off');
+                irToggleButton.classList.add('is-off');
+            }
+
+            irToggleButton.addEventListener('click', function() {
+                fetch('/toggle_ir_mode', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const newIrStateText = data.new_ir_state ? 'ON' : 'OFF';
+                        currentIrStatus.textContent = newIrStateText;
+
+                        // Update button and status class based on new state
+                        if (data.new_ir_state) {
+                            currentIrStatus.classList.remove('is-off');
+                            irToggleButton.classList.remove('is-off');
+                        } else {
+                            currentIrStatus.classList.add('is-off');
+                            irToggleButton.classList.add('is-off');
+                        }
+
+                        console.log('IR Mode Toggled to:', newIrStateText);
+                        // Reload the page to force the video feed to restart with the new IR setting
+                        // This is important because Flask's video_feed generator uses config directly
+                        window.location.reload();
+                    } else {
+                        console.error('Failed to toggle IR mode.');
+                        alert('Operation failed: Could not toggle IR mode.');
+                        feedStatus.textContent = 'ERROR';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error toggling IR mode:', error);
+                    alert('Communication error: Failed to reach server. Check network connection.');
+                    feedStatus.textContent = 'DISCONNECTED';
+                });
+            });
+
+            // Example of dynamic feed status update (can be linked to WebSocket in real app)
+            // You'd replace this with actual logic that checks if video_feed is successfully streaming
+            const videoImg = document.querySelector('.video-area img');
+            videoImg.addEventListener('error', () => {
+                feedStatus.textContent = 'OFFLINE';
+                feedStatus.style.color = 'var(--accent-red)'; // Make text red on error
+            });
+            videoImg.addEventListener('load', () => {
+                feedStatus.textContent = 'ACTIVE';
+                feedStatus.style.color = 'white'; // Default color
+            });
+
+            // --- SSE for Real-time Logs ---
+            const eventSource = new EventSource("{{ url_for('log_stream') }}");
+
+            eventSource.onmessage = function(event) {
+                const newLogEntry = document.createElement('p');
+                newLogEntry.innerHTML = event.data; // Using innerHTML if logs contain HTML like color spans
+                logDisplay.appendChild(newLogEntry);
+                // Auto-scroll to the bottom
+                logDisplay.scrollTop = logDisplay.scrollHeight;
+            };
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                const errorLogEntry = document.createElement('p');
+                errorLogEntry.innerHTML = '<span style="color: var(--accent-red); font-weight: bold;">[ERROR] Lost connection to log stream. Attempting to reconnect...</span>';
+                logDisplay.appendChild(errorLogEntry);
+                logDisplay.scrollTop = logDisplay.scrollHeight;
+            };
+
+            eventSource.onopen = function(event) {
+                console.log("Connected to log stream.");
+                const connectedLogEntry = document.createElement('p');
+                connectedLogEntry.innerHTML = '<span style="color: var(--accent-green); font-weight: bold;">[INFO] Connected to live log stream.</span>';
+                logDisplay.appendChild(connectedLogEntry);
+                logDisplay.scrollTop = logDisplay.scrollHeight;
+            };
+        });
+    </script>
+</body>
+</html>

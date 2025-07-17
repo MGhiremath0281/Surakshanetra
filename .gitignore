@@ -1,0 +1,85 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.env/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Python distribution files
+*.egg-info/
+dist/
+build/
+
+# Model weights and checkpoints
+*.pt
+*.pth
+runs/
+weights/
+checkpoints/
+yolov8_models/
+
+# Videos and large media files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.flv
+*.wmv
+*.gif
+
+# Output folders
+output/
+outputs/
+results/
+inference/
+detections/
+logs/
+__results__/
+
+# Dataset folders (if using custom datasets locally)
+datasets/
+data/
+*.zip
+*.tar.gz
+
+# Image files (intermediate files)
+*.jpg
+*.jpeg
+*.png
+*.bmp
+
+# Sound files (used for alerts)
+*.wav
+*.mp3
+
+# System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE/editor files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Flask-specific
+instance/
+*.log
+*.db
+
+# Temporary files
+*.tmp
+*.bak
+*.swp

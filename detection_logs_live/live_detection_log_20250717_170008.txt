@@ -1,0 +1,9 @@
+[2025-07-17 17:00:08.548] --- Live Detection Log Started: 2025-07-17 17:00:08 ---
+[2025-07-17 17:00:08.549] Camera Source: 0
+[2025-07-17 17:00:08.549] Rotation Angle: 0
+[2025-07-17 17:00:08.549] IR Mode: True
+[2025-07-17 17:00:08.549] Base Model: yolov8x.pt
+[2025-07-17 17:00:08.549] Fire Model: yolofirenew.pt
+[2025-07-17 17:00:08.549] ------------------------------------------------------------
+[2025-07-17 17:00:08.550] Logging to: detection_logs_live\live_detection_log_20250717_170008.txt
+[2025-07-17 17:00:11.347] Starting live detection stream for source: 0 with rotation=0 and IR_Mode=True

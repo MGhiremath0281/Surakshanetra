@@ -1,0 +1,16 @@
+--- Live Detection Log Started: 2025-07-17 17:23:24 ---
+Camera Source: C:\Users\adity\Desktop\SurakshaNethra\data\firedata2.mp4
+Rotation Angle: 0
+IR Mode: False
+Base Model: yolov8x.pt
+Fire Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-17 17:23:24.384] Logging to: detection_logs_live\live_detection_log_20250717_172324.txt
+[2025-07-17 17:23:24.533] ✅ Base model loaded successfully.
+[2025-07-17 17:23:24.585] ✅ Fire model loaded successfully.
+[2025-07-17 17:23:24.585] Releasing previous camera source.
+[2025-07-17 17:23:24.919] Starting live detection stream for source: C:\Users\adity\Desktop\SurakshaNethra\data\firedata2.mp4 with rotation=0 and IR_Mode=False
+[2025-07-17 17:23:27.785] ALERT: Person detected with confidence 0.92, Person detected with confidence 0.91, Vehicle (car) detected with confidence 0.91, Vehicle (truck) detected with confidence 0.91, Vehicle (car) detected with confidence 0.89, 🔥🔥🔥 Fire detected with confidence 0.71 🔥🔥🔥
+[2025-07-17 17:23:38.283] ALERT: Person detected with confidence 0.93, Person detected with confidence 0.93, Vehicle (car) detected with confidence 0.90, Vehicle (car) detected with confidence 0.89, Vehicle (truck) detected with confidence 0.89, 🔥🔥🔥 Fire detected with confidence 0.75 🔥🔥🔥
+[2025-07-17 17:23:48.601] ALERT: Person detected with confidence 0.93, Person detected with confidence 0.91, Vehicle (car) detected with confidence 0.90, Vehicle (truck) detected with confidence 0.89, Vehicle (car) detected with confidence 0.88, 🔥🔥🔥 Fire detected with confidence 0.80 🔥🔥🔥
+[2025-07-17 17:23:50.485] Voice alert played on device: 'ALERT: Person detected with confidence 0.92, Person detected with confidence 0.91, Vehicle (car) detected with confidence 0.91, Vehicle (truck) detected with confidence 0.91, Vehicle (car) detected with confidence 0.89, 🔥🔥🔥 Fire detected with confidence 0.71 🔥🔥🔥'

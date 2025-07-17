@@ -1,0 +1,10 @@
+--- Live Detection Log Started: 2025-07-17 16:14:33 ---
+Camera Source: 0
+Base Model: yolov8x.pt
+Fire Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-17 16:14:33.292] Logging to: detection_logs_live\live_detection_log_20250717_161433.txt
+[2025-07-17 16:14:37.220] Starting live detection stream for source: 0 with rotation=0 and IR_Mode=True
+[2025-07-17 16:14:41.796] Sound alert triggered: HUMAN
+[2025-07-17 16:14:47.305] Sound alert triggered: HUMAN
+[2025-07-17 16:14:52.859] Sound alert triggered: FIRE

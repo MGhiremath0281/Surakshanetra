@@ -1,0 +1,5 @@
+--- Live Detection Log Started: 2025-07-17 16:11:20 ---
+Camera Source: 0
+Base Model: yolov8x.pt
+Fire Model: yolofirenew.pt
+------------------------------------------------------------

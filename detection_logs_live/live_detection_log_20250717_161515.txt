@@ -1,0 +1,9 @@
+--- Live Detection Log Started: 2025-07-17 16:15:15 ---
+Camera Source: C:\Users\adity\Desktop\SurakshaNethra\data\firedata2.mp4
+Base Model: yolov8x.pt
+Fire Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-17 16:15:15.356] Logging to: detection_logs_live\live_detection_log_20250717_161515.txt
+[2025-07-17 16:15:15.532] Starting live detection stream for source: C:\Users\adity\Desktop\SurakshaNethra\data\firedata2.mp4 with rotation=0 and IR_Mode=True
+[2025-07-17 16:15:16.695] Sound alert triggered: HUMAN_VEHICLE
+[2025-07-17 16:15:21.897] Sound alert triggered: HUMAN_VEHICLE

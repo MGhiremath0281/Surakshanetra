@@ -1,0 +1,21 @@
+--- Live Detection Log Started: 2025-07-17 17:22:29 ---
+Camera Source: 0
+Rotation Angle: 0
+IR Mode: False
+Base Model: yolov8x.pt
+Fire Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-17 17:22:29.971] Logging to: detection_logs_live\live_detection_log_20250717_172229.txt
+[2025-07-17 17:22:30.238] ✅ Base model loaded successfully.
+[2025-07-17 17:22:30.330] ✅ Fire model loaded successfully.
+[2025-07-17 17:22:32.827] Starting live detection stream for source: 0 with rotation=0 and IR_Mode=False
+[2025-07-17 17:22:36.400] ALERT: Person detected with confidence 0.94
+[2025-07-17 17:22:41.814] Voice alert played on device: 'ALERT: Person detected with confidence 0.94'
+[2025-07-17 17:22:46.977] ALERT: Person detected with confidence 0.95
+[2025-07-17 17:22:51.485] Voice alert played on device: 'ALERT: Person detected with confidence 0.95'
+[2025-07-17 17:22:57.107] ALERT: Person detected with confidence 0.95
+[2025-07-17 17:23:01.644] Voice alert played on device: 'ALERT: Person detected with confidence 0.95'
+[2025-07-17 17:23:07.583] ALERT: Person detected with confidence 0.95
+[2025-07-17 17:23:12.649] Voice alert played on device: 'ALERT: Person detected with confidence 0.95'
+[2025-07-17 17:23:17.665] ALERT: Person detected with confidence 0.95
+[2025-07-17 17:23:22.172] Voice alert played on device: 'ALERT: Person detected with confidence 0.95'

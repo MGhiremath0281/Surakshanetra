@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing Results - Suraksha Nethra</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .navbar {
+            background-color: #007bff;
+            padding: 1rem;
+        }
+        .navbar-brand {
+            color: white !important;
+            font-weight: 700;
+            font-size: 1.8rem;
+        }
+        .container {
+            flex: 1;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .card {
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            width: 100%;
+            max-width: 900px;
+            margin-bottom: 20px;
+        }
+        .card h2 {
+            color: #007bff;
+            font-weight: 700;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        .video-container {
+            width: 100%;
+            max-width: 860px; /* Adjust based on desired video size */
+            margin: 0 auto 20px auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+            background-color: #000;
+        }
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        #logs-container {
+            background-color: #f4f6f9;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+            text-align: left;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            white-space: pre-wrap; /* Preserve whitespace and wrap text */
+            word-wrap: break-word; /* Break long words */
+        }
+        .footer {
+            background-color: #343a40;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            margin-top: auto;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <a class="navbar-brand" href="{{ url_for('index') }}">Suraksha Nethra</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('index') }}">Home</a>
+                </li>
+                <li class="nav-item active">
+                    <a class="nav-link" href="{{ url_for('upload_video') }}">Upload Video <span class="sr-only">(current)</span></a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('live_detection') }}">Live Detection</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="card">
+            <h2 id="resultsHeader"></h2>
+
+            <div id="successContent" style="display: none;">
+                <p class="text-success text-center lead">Video processed successfully!</p>
+                <div class="video-container">
+                    <video id="processedVideo" controls autoplay muted>
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+                <p class="text-muted text-center">Right-click on the video to download or save.</p>
+            </div>
+
+            <div id="errorContent" style="display: none;">
+                <p class="text-danger text-center lead">Video processing failed.</p>
+                <p class="text-danger text-center" id="errorMessage"></p>
+            </div>
+
+            <h4 class="mt-4">Processing Logs:</h4>
+            <div id="logs-container">
+                <p>No logs available.</p>
+            </div>
+            
+            <div class="text-center mt-4">
+                <a href="{{ url_for('upload_video') }}" class="btn btn-primary">Upload Another Video</a>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <span>&copy; 2025 Suraksha Nethra. All rights reserved.</span>
+        </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const videoUrl = urlParams.get('video_url');
+            const error = urlParams.get('error');
+            const logsJson = urlParams.get('logs');
+            let logs = [];
+
+            if (logsJson) {
+                try {
+                    logs = JSON.parse(decodeURIComponent(logsJson));
+                } catch (e) {
+                    console.error("Error parsing logs JSON:", e);
+                    logs = ["Error parsing logs."];
+                }
+            }
+
+            if (videoUrl) {
+                $('#resultsHeader').text('Video Processing Results');
+                $('#successContent').show();
+                $('#processedVideo').attr('src', decodeURIComponent(videoUrl));
+            } else if (error) {
+                $('#resultsHeader').text('Video Processing Failed');
+                $('#errorContent').show();
+                $('#errorMessage').text(decodeURIComponent(error));
+            } else {
+                $('#resultsHeader').text('No Results Available');
+                $('#errorContent').show();
+                $('#errorMessage').text('No processing results found. This might be due to a direct page access or an internal error.');
+            }
+
+            if (logs.length > 0) {
+                $('#logs-container').html(logs.join('\n'));
+            } else {
+                $('#logs-container').html('<p>No detailed logs were recorded for this session.</p>');
+            }
+        });
+    </script>
+</body>
+</html>

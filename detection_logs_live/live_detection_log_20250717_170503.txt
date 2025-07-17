@@ -1,0 +1,10 @@
+--- Live Detection Log Started: 2025-07-17 17:05:03 ---
+Camera Source: 0
+Rotation Angle: 0
+IR Mode: False
+Base Model: yolov8x.pt
+Fire Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-17 17:05:03.710] Logging to: detection_logs_live\live_detection_log_20250717_170503.txt
+[2025-07-17 17:05:03.942] ✅ Base model loaded successfully.
+[2025-07-17 17:05:04.043] ✅ Fire model loaded successfully.
