@@ -34,6 +34,7 @@
 </head>
 <body class="flex h-screen bg-gray-900 text-gray-200">
 
+    <!-- Sidebar -->
     <aside class="sidebar w-64 p-6 flex flex-col justify-between">
         <div>
             <h1 class="text-3xl font-bold mb-8 text-blue-400">SurakshaNethra</h1>
@@ -45,16 +46,16 @@
                     <li><a href="/forbidden_zone_ids" class="block py-2 px-4 rounded-lg hover:bg-gray-700 transition duration-200">Simharekha</a></li>
                     <li><a href="/vihangvetri_dashboard" class="block py-2 px-4 rounded-lg hover:bg-gray-700 transition duration-200">VihangVetri</a></li>
                     <li><a href="/margadarshi_dashboard" class="block py-2 px-4 rounded-lg hover:bg-gray-700 transition duration-200">Margadarshi</a></li>
-                    <li><a href="/shankasoochi_dashboard" class="block py-2 px-4 rounded-lg hover:bg-gray-700 transition duration-200">Shankasoochi</a></li>
                 </ul>
             </nav>
         </div>
         <div class="mt-8">
             <p class="text-sm text-gray-500">System Status: <span class="text-green-400">Online</span></p>
-            <p class="text-sm text-gray-500">Last Update: {{ now.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+            <p class="text-sm text-gray-500">Last Update: {{ now.strftime('%Y-%m-%d %H:%M:%S') if now else 'N/A' }}</p>
         </div>
     </aside>
 
+    <!-- Main Content Area -->
     <main class="flex-1 flex flex-col p-8 overflow-auto">
         <header class="mb-8">
             <h2 class="text-4xl font-extrabold text-white">Explore SurakshaNethra Features</h2>
@@ -62,34 +63,32 @@
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Agnidrishti Card -->
             <div class="feature-card rounded-xl shadow-lg p-6">
                 <h3 class="text-xl font-semibold mb-3 text-blue-300">Agnidrishti - Fire & Smoke Detection</h3>
                 <p class="text-gray-400 mb-4">Real-time fire and smoke detection for early warning and rapid response.</p>
                 <a href="/dashboard" class="btn-primary py-2 px-4 rounded-md font-semibold inline-block">Go to Dashboard</a>
             </div>
 
+            <!-- Simharekha Card -->
             <div class="feature-card rounded-xl shadow-lg p-6">
                 <h3 class="text-xl font-semibold mb-3 text-blue-300">Simharekha - Forbidden Zone Intrusion</h3>
                 <p class="text-gray-400 mb-4">Monitor restricted areas and receive alerts for unauthorized entries.</p>
                 <a href="/forbidden_zone_ids" class="btn-primary py-2 px-4 rounded-md font-semibold inline-block">Go to Dashboard</a>
             </div>
 
+            <!-- VihangVetri Card -->
             <div class="feature-card rounded-xl shadow-lg p-6">
                 <h3 class="text-xl font-semibold mb-3 text-blue-300">VihangVetri - Drone Detection</h3>
                 <p class="text-gray-400 mb-4">Detect and track unauthorized drones in sensitive airspace.</p>
                 <a href="/vihangvetri_dashboard" class="btn-primary py-2 px-4 rounded-md font-semibold inline-block">Go to Dashboard</a>
             </div>
 
+            <!-- NEW: Margadarshi Card -->
             <div class="feature-card rounded-xl shadow-lg p-6">
                 <h3 class="text-xl font-semibold mb-3 text-blue-300">Margadarshi - Runway Clearance</h3>
                 <p class="text-gray-400 mb-4">Ensure clear runways and designated areas by detecting objects and personnel.</p>
                 <a href="/margadarshi_dashboard" class="btn-primary py-2 px-4 rounded-md font-semibold inline-block">Go to Dashboard</a>
-            </div>
-
-            <div class="feature-card rounded-xl shadow-lg p-6">
-                <h3 class="text-xl font-semibold mb-3 text-blue-300">Shankasoochi - Anomaly Detection</h3>
-                <p class="text-gray-400 mb-4">Automatically identify unusual patterns or behaviors that indicate potential threats or issues.</p>
-                <a href="/shankasoochi_dashboard" class="btn-primary py-2 px-4 rounded-md font-semibold inline-block">Go to Dashboard</a>
             </div>
         </div>
     </main>

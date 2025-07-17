@@ -1,0 +1,11 @@
+--- Agnidrishti Live Detection Log Started: 2025-07-18 02:17:04 ---
+Camera Source: 0
+Rotation Angle: 0
+IR Mode: False
+Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-18 02:17:04.830] ✅ Agnidrishti model 'yolov8_models\yolofirenew.pt' loaded successfully.
+[2025-07-18 02:17:07.630] Camera/video source '0' opened successfully. Actual Resolution: 640.0x480.0
+[2025-07-18 02:17:07.630] AgnidrishtiCamera is now fully ready.
+[2025-07-18 02:17:07.648] Starting Agnidrishti live detection stream for source: 0 with rotation=0 and IR_Mode=False
+[2025-07-18 02:17:07.663] Error during Agnidrishti model inference: 'CONFIDENCE_THRESHOLD'

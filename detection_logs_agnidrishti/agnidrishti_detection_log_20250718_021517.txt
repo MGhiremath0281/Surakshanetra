@@ -1,0 +1,10 @@
+--- Agnidrishti Live Detection Log Started: 2025-07-18 02:15:17 ---
+Camera Source: C:\Users\adity\Desktop\SurakshaNethra\data\firedata2.mp4
+Rotation Angle: 0
+IR Mode: False
+Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-18 02:15:17.773] ✅ Agnidrishti model 'yolov8_models\yolofirenew.pt' loaded successfully.
+[2025-07-18 02:15:17.806] CRITICAL ERROR: Failed to open camera/video source 'C:\Users\adity\Desktop\SurakshaNethra\data\firedata2.mp4': 'DISPLAY_WIDTH'
+[2025-07-18 02:15:17.807] ERROR: AgnidrishtiCamera failed to initialize. Check logs.
+[2025-07-18 02:15:17.823] Waiting for AgnidrishtiCamera instance to be ready before generating frames...
