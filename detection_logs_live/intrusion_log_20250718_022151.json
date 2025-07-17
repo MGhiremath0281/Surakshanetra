@@ -1,0 +1,74 @@
+[
+  {
+    "timestamp": "2025-07-18T02:22:05.298547",
+    "zone": "zone1",
+    "object_class": "person",
+    "confidence": "0.94",
+    "zone_scale": "1.77",
+    "snapshot_file": "intrusion_snapshot_20250718_022205.jpg"
+  },
+  {
+    "timestamp": "2025-07-18T02:22:05.778049",
+    "zone": "zone1",
+    "object_class": "person",
+    "confidence": "0.93",
+    "zone_scale": "1.77",
+    "snapshot_file": "intrusion_snapshot_20250718_022205.jpg"
+  },
+  {
+    "timestamp": "2025-07-18T02:22:05.778049",
+    "zone": "zone1",
+    "object_class": "person",
+    "confidence": "0.25",
+    "zone_scale": "1.77",
+    "snapshot_file": "intrusion_snapshot_20250718_022205.jpg"
+  },
+  {
+    "timestamp": "2025-07-18T02:22:06.272846",
+    "zone": "zone1",
+    "object_class": "person",
+    "confidence": "0.93",
+    "zone_scale": "1.77",
+    "snapshot_file": "intrusion_snapshot_20250718_022206.jpg"
+  },
+  {
+    "timestamp": "2025-07-18T02:22:06.274861",
+    "zone": "zone1",
+    "object_class": "person",
+    "confidence": "0.27",
+    "zone_scale": "1.77",
+    "snapshot_file": "intrusion_snapshot_20250718_022206.jpg"
+  },
+  {
+    "timestamp": "2025-07-18T02:22:06.743121",
+    "zone": "zone1",
+    "object_class": "person",
+    "confidence": "0.94",
+    "zone_scale": "1.77",
+    "snapshot_file": "intrusion_snapshot_20250718_022206.jpg"
+  },
+  {
+    "timestamp": "2025-07-18T02:22:07.223169",
+    "zone": "zone1",
+    "object_class": "person",
+    "confidence": "0.91",
+    "zone_scale": "1.77",
+    "snapshot_file": "intrusion_snapshot_20250718_022207.jpg"
+  },
+  {
+    "timestamp": "2025-07-18T02:22:07.682885",
+    "zone": "zone1",
+    "object_class": "person",
+    "confidence": "0.94",
+    "zone_scale": "1.77",
+    "snapshot_file": "intrusion_snapshot_20250718_022207.jpg"
+  },
+  {
+    "timestamp": "2025-07-18T02:22:08.135521",
+    "zone": "zone1",
+    "object_class": "person",
+    "confidence": "0.95",
+    "zone_scale": "1.77",
+    "snapshot_file": "intrusion_snapshot_20250718_022208.jpg"
+  }
+]
