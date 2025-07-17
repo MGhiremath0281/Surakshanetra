@@ -1,69 +1,55 @@
-import cv2
-import os
-import time
-from datetime import datetime
-from ultralytics import YOLO
+from flask import Flask, render_template, Response, jsonify, request, redirect, url_for
+from flask_socketio import SocketIO, emit
 import threading
-import numpy as np
-import pyttsx3 # For text-to-speech
-import json
-from queue import Queue # Import Queue for thread-safe logging
+import time
+import os
+import queue
+from datetime import datetime
+import json # For loading/saving config
+import cv2 # For placeholder image generation
+import numpy as np # For placeholder image generation
 
+# --- Import your feature handlers ---
+# Make sure the import paths are correct based on your 'model_handlers' folder
+from model_handlers.agnidrishti_live import AgnidrishtiCamera, get_agnidrishti_log_queue
+from model_handlers.simharekha_live import ForbiddenZoneIDS, intrusion_log_queue, get_alert_active as get_fzids_alert_active, set_alert_active as set_fzids_alert_active
 
-# --- Paths ---
-BASE_YOLO_MODEL_PATH = os.path.join('yolov8_models', 'yolov8x.pt')
-FIRE_YOLO_MODEL_PATH = os.path.join('yolov8_models', 'yolofirenew.pt')
+app = Flask(__name__)
+# Configure a secret key for Flask sessions and SocketIO
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your_default_secret_key_change_this_in_production')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-# --- CONFIGURATION ---
-DEFAULT_CONFIG = {
+# --- Global instances for managing cameras/features ---
+active_feature_instance = {
+    "agnidrishti": None,
+    "forbidden_zone": None
+}
+
+# --- Threading locks for camera management ---
+feature_locks = {
+    "agnidrishti": threading.Lock(),
+    "forbidden_zone": threading.Lock()
+}
+
+# --- Configuration Management for Agnidrishti (from original app.py) ---
+CONFIG_FILE = 'stream_config.json'
+DEFAULT_AGNIDRISHTI_CONFIG = {
     'camera_source': 0,
     'rotation_angle': 0,
     'ir_mode': False,
-    'voice_alerts_enabled': True,  # Default to True for on-device voice alerts
-    'voice_gender': 'male', # Male or female voice
-    'detection_cooldown_seconds': 10 # Cooldown to prevent spamming alerts
+    'voice_alerts_enabled': True,
+    'voice_gender': 'male',
+    'detection_cooldown_seconds': 10
 }
 
-HUMAN_CLASS_NAME = 'person'
-VEHICLE_CLASS_NAMES = ['car', 'truck', 'bus', 'motorcycle', 'bicycle']
-FIRE_CLASS_NAME = 'Fire'
-
-CONFIDENCE_THRESHOLD_BASE = 0.5
-CONFIDENCE_THRESHOLD_FIRE = 0.3
-
-LOGS_DIRECTORY = 'detection_logs_live'
-LOG_FILE_NAME_PREFIX = 'live_detection_log_'
-
-LOG_FILE_HANDLE = None
-
-# --- Flask App Setup ---
-from flask import Flask, render_template, Response, request, redirect, url_for, jsonify
-
-app = Flask(__name__)
-current_config = {}
-active_cap = None
-cap_lock = threading.Lock()
-# Lock for TTS engine to prevent concurrent access issues
-tts_lock = threading.Lock()
-# Last detection time for cooldown
-last_alert_time = 0
-
-# --- SSE Log Queue ---
-# This queue will hold log messages to be sent to the dashboard via SSE
-log_queue = Queue()
-
-
-# --- Configuration Management Functions ---
-CONFIG_FILE = 'stream_config.json'
-
-def load_config():
-    """Loads configuration from a JSON file, or returns default if not found/invalid."""
+def load_agnidrishti_config():
+    """Loads configuration for Agnidrishti from a JSON file, or returns default if not found/invalid."""
     try:
         if os.path.exists(CONFIG_FILE):
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
                 # Ensure all default keys are present in loaded config
-                for key, default_val in DEFAULT_CONFIG.items():
+                for key, default_val in DEFAULT_AGNIDRISHTI_CONFIG.items():
                     if key not in config:
                         config[key] = default_val
                 # Remove any old email keys if they exist in the loaded config
@@ -75,411 +61,312 @@ def load_config():
                 config.pop('smtp_port', None)
                 return config
     except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"Warning: Could not load config file ({e}). Using default configuration.")
-    return DEFAULT_CONFIG.copy()
+        print(f"Warning: Could not load config file ({e}). Using default configuration for Agnidrishti.")
+    return DEFAULT_AGNIDRISHTI_CONFIG.copy()
 
-def save_config(config):
-    """Saves the current configuration to a JSON file."""
+def save_agnidrishti_config(config):
+    """Saves the current configuration for Agnidrishti to a JSON file."""
     try:
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=4)
     except IOError as e:
         print(f"Error saving config file: {e}")
 
-# Load initial configuration when the app starts
-current_config = load_config()
-print(f"Initial Loaded Config: {current_config}")
+# Load initial configuration for Agnidrishti when the app starts
+current_agnidrishti_config = load_agnidrishti_config()
+print(f"Initial Agnidrishti Config: {current_agnidrishti_config}")
 
+# --- Source Configuration for Forbidden Zone IDS (can be made persistent later) ---
+current_forbidden_zone_source = "0" # Default webcam for Forbidden Zone IDS
 
-# --- Helper Functions ---
-def get_class_id(model, class_name, captured_logs):
-    """Safely gets class ID from model names, logging if not found."""
-    if not hasattr(model, 'names') or not isinstance(model.names, dict):
-        print(f"Warning: Model does not have a valid 'names' attribute. Cannot lookup class '{class_name}'.")
-        return None
-
-    for class_id, name in model.names.items():
-        if name.strip().lower() == class_name.strip().lower():
-            return class_id
-    print(f"Warning: Class '{class_name}' not found in model names.")
-    return None
-
-def log_event_wrapper(msg, captured_logs=None):
-    """Logs an event, appends it to a list, writes to file, prints to console, and sends to SSE queue."""
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    log_msg = f"[{ts}] {msg}"
-
-    # For internal debugging/display (captured_logs argument is typically for generator scope)
-    if captured_logs is not None:
-        captured_logs.append(log_msg)
-
-    # Write to global log file
-    if LOG_FILE_HANDLE and not LOG_FILE_HANDLE.closed:
-        try:
-            LOG_FILE_HANDLE.write(log_msg + "\n")
-            LOG_FILE_HANDLE.flush()
-        except Exception as e:
-            print(f"Error writing to log file from app.py context: {e}")
-    
-    # Print to console
-    print(log_msg)
-
-    # Send to SSE queue for real-time display on dashboard
-    try:
-        log_queue.put(log_msg)
-    except Exception as e:
-        print(f"Error putting message into log_queue: {e}")
-
-
-def get_blank_frame(width=640, height=480, text="ERROR: NO FEED"):
-    """Generates a blank black frame with an error message."""
-    blank_frame = np.zeros((height, width, 3), dtype=np.uint8)
-    text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 2)[0]
-    text_x = (width - text_size[0]) // 2
-    text_y = (height + text_size[1]) // 2
-    cv2.putText(blank_frame, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-    return blank_frame
-
-# --- Notification Functions ---
-def play_voice_alert(text, voice_gender):
-    """Converts text to speech and plays it directly on the device."""
-    with tts_lock: # Acquire lock before using TTS engine
-        try:
-            engine = pyttsx3.init()
-            voices = engine.getProperty('voices')
-            
-            selected_voice_id = None
-            for voice in voices:
-                # Attempt to find a male or female voice based on preference and common indicators
-                if voice_gender.lower() == 'male':
-                    if 'male' in voice.name.lower() or 'david' in voice.name.lower() or voice.id.endswith('Microsoft SAPI5 English (United States) - David'): # Example for Windows David
-                        selected_voice_id = voice.id
-                        break
-                elif voice_gender.lower() == 'female':
-                    if 'female' in voice.name.lower() or 'zira' in voice.name.lower() or voice.id.endswith('Microsoft SAPI5 English (United States) - Zira'): # Example for Windows Zira
-                        selected_voice_id = voice.id
-                        break
-            
-            if selected_voice_id:
-                engine.setProperty('voice', selected_voice_id)
-            else:
-                log_event_wrapper(f"Warning: No suitable '{voice_gender}' voice found. Using default voice.", None)
-
-            engine.say(text)
-            engine.runAndWait()
-            log_event_wrapper(f"Voice alert played on device: '{text}'", None)
-        except Exception as e:
-            log_event_wrapper(f"Failed to play voice alert on device: {e}", None)
-
-
-# --- MAIN STREAMING GENERATOR FUNCTION ---
-def generate_frames_with_detection(camera_source, rotation_angle, ir_mode):
-    global LOG_FILE_HANDLE
-    global active_cap
-    global last_alert_time # Access the global last_alert_time for cooldown
-    captured_logs = []
-
-    # Setup logging to file
-    try:
-        if not os.path.exists(LOGS_DIRECTORY):
-            os.makedirs(LOGS_DIRECTORY)
-            log_event_wrapper(f"Created log directory: {LOGS_DIRECTORY}", captured_logs)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_file_path = os.path.join(LOGS_DIRECTORY, f"{LOG_FILE_NAME_PREFIX}{timestamp}.txt")
-        LOG_FILE_HANDLE = open(log_file_path, 'a', encoding='utf-8')
-        
-        LOG_FILE_HANDLE.write(f"--- Live Detection Log Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
-        LOG_FILE_HANDLE.write(f"Camera Source: {camera_source}\n")
-        LOG_FILE_HANDLE.write(f"Rotation Angle: {rotation_angle}\n")
-        LOG_FILE_HANDLE.write(f"IR Mode: {ir_mode}\n")
-        LOG_FILE_HANDLE.write(f"Base Model: {os.path.basename(BASE_YOLO_MODEL_PATH)}\n")
-        LOG_FILE_HANDLE.write(f"Fire Model: {os.path.basename(FIRE_YOLO_MODEL_PATH)}\n")
-        LOG_FILE_HANDLE.write("-" * 60 + "\n")
-        log_event_wrapper(f"Logging to: {log_file_path}", captured_logs)
-    except Exception as e:
-        log_event_wrapper(f"Failed to open log file: {e}. File logging disabled for this session.", captured_logs)
-        LOG_FILE_HANDLE = None
-
-    # Load YOLO models
-    base_model = None
-    fire_model = None
-    try:
-        if os.path.exists(BASE_YOLO_MODEL_PATH):
-            base_model = YOLO(BASE_YOLO_MODEL_PATH)
-            log_event_wrapper("✅ Base model loaded successfully.", captured_logs)
-        else:
-            log_event_wrapper(f"❌ Base model not found at {BASE_YOLO_MODEL_PATH}. Human/Vehicle detection will be skipped.", captured_logs)
-
-        if os.path.exists(FIRE_YOLO_MODEL_PATH):
-            fire_model = YOLO(FIRE_YOLO_MODEL_PATH)
-            log_event_wrapper("✅ Fire model loaded successfully.", captured_logs)
-        else:
-            log_event_wrapper(f"❌ Fire model not found at {FIRE_YOLO_MODEL_PATH}. Fire detection will be skipped.", captured_logs)
-
-        if base_model is None and fire_model is None:
-            log_event_wrapper("❌ No YOLO models could be loaded. Detection will not function.", captured_logs)
-            if LOG_FILE_HANDLE: LOG_FILE_HANDLE.close()
-            yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + cv2.imencode('.jpg', get_blank_frame(text=f"ERROR: NO MODELS LOADED"))[1].tobytes() + b'\r\n'
-            return
-
-    except Exception as e:
-        log_event_wrapper(f"❌ Model load error: {e}. Please check model paths and integrity.", captured_logs)
-        if LOG_FILE_HANDLE: LOG_FILE_HANDLE.close()
-        yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + cv2.imencode('.jpg', get_blank_frame(text=f"ERROR: MODEL LOAD FAILED - {e}"))[1].tobytes() + b'\r\n'
-        return
-
-    HUMAN_ID = get_class_id(base_model, HUMAN_CLASS_NAME, captured_logs) if base_model else None
-    VEHICLE_IDS = [get_class_id(base_model, vn, captured_logs) for vn in VEHICLE_CLASS_NAMES if base_model and get_class_id(base_model, vn, captured_logs) is not None] if base_model else []
-    FIRE_ID = get_class_id(fire_model, FIRE_CLASS_NAME, captured_logs) if fire_model else None
-
-    if FIRE_ID is None and fire_model:
-        log_event_wrapper(f"CRITICAL ERROR: Fire class '{FIRE_CLASS_NAME}' not found in fire model. Fire detection will not function.", captured_logs)
-
-    # Acquire lock for camera access
-    with cap_lock:
-        if active_cap and active_cap.isOpened():
-            log_event_wrapper("Releasing previous camera source.", captured_logs)
-            active_cap.release()
-
-        cap = cv2.VideoCapture(camera_source)
-        active_cap = cap # Set the global active_cap
-
-        if isinstance(camera_source, str) and (camera_source.startswith("rtsp://") or camera_source.startswith("http://")):
-            log_event_wrapper(f"Attempting to open IP camera stream: {camera_source}", captured_logs)
-            time.sleep(2)
-            for i in range(3): # Retry mechanism for IP cameras
-                if cap.isOpened():
-                    log_event_wrapper(f"Successfully opened IP camera connection on attempt {i+1}.", captured_logs)
-                    break
-                log_event_wrapper(f"Retrying IP camera connection (attempt {i+1}/3)...", captured_logs)
-                cap.release() # Release before retrying
-                time.sleep(3)
-                cap = cv2.VideoCapture(camera_source)
-            if not cap.isOpened():
-                log_event_wrapper(f"Failed to open IP camera source '{camera_source}' after multiple retries.", captured_logs)
-
-        if not cap.isOpened():
-            error_message = f"CRITICAL ERROR: Failed to open camera/video source '{camera_source}'. "
-            if isinstance(camera_source, int):
-                error_message += "Check if webcam is connected and not in use by another application."
-            elif isinstance(camera_source, str) and os.path.exists(camera_source):
-                error_message += "Check if video file path is correct and accessible."
-            elif isinstance(camera_source, str) and (camera_source.startswith("rtsp://") or camera_source.startswith("http://")):
-                error_message += "Check IP camera URL, credentials, network connectivity, or firewall settings."
-            else:
-                error_message += "Invalid camera source or access denied."
-                
-            log_event_wrapper(error_message, captured_logs)
-            if LOG_FILE_HANDLE: LOG_FILE_HANDLE.close()
-            yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + cv2.imencode('.jpg', get_blank_frame(text=f"ERROR: CAMERA/VIDEO SOURCE FAILED"))[1].tobytes() + b'\r\n'
-            return
-
-    log_event_wrapper(f"Starting live detection stream for source: {camera_source} with rotation={rotation_angle} and IR_Mode={ir_mode}", captured_logs)
-
-    while True:
-        # Dynamically load current config to apply changes without restarting
-        current_stream_config = load_config()
-        current_rotation_angle = current_stream_config['rotation_angle']
-        current_ir_mode = current_stream_config['ir_mode']
-        voice_alerts_enabled = current_stream_config['voice_alerts_enabled']
-        voice_gender = current_stream_config['voice_gender']
-        detection_cooldown_seconds = current_stream_config['detection_cooldown_seconds']
-
-
-        ret, frame = cap.read()
-        if not ret:
-            log_event_wrapper("Failed to grab frame or end of video stream. Stopping stream.", captured_logs)
-            if isinstance(camera_source, str) and not (camera_source.startswith("rtsp://") or camera_source.startswith("http://")):
-                yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + cv2.imencode('.jpg', get_blank_frame(text="VIDEO ENDED / DISCONNECTED"))[1].tobytes() + b'\r\n'
-            break
-
-        if frame is None:
-            log_event_wrapper("Frame is None. Skipping frame.", captured_logs)
-            continue
-
-        # Apply rotation
-        if current_rotation_angle == 90:
-            frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
-        elif current_rotation_angle == 180:
-            frame = cv2.rotate(frame, cv2.ROTATE_180)
-        elif current_rotation_angle == 270:
-            frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-
-        # Apply IR mode
-        if current_ir_mode:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            frame = cv2.applyColorMap(gray, cv2.COLORMAP_HOT)
-
-        detection_messages = []
-
-        # Run base model detection
-        if base_model and (HUMAN_ID is not None or VEHICLE_IDS):
-            base_classes_to_detect = []
-            if HUMAN_ID is not None:
-                base_classes_to_detect.append(HUMAN_ID)
-            base_classes_to_detect.extend(VEHICLE_IDS)
-
-            if base_classes_to_detect:
+# --- Utility Functions ---
+def stop_all_active_features():
+    """Stops all currently running feature instances."""
+    print("Stopping all active feature instances...")
+    for feature_name, instance in active_feature_instance.items():
+        if instance is not None:
+            with feature_locks[feature_name]:
                 try:
-                    results_base = base_model(frame, verbose=False, conf=CONFIDENCE_THRESHOLD_BASE, classes=base_classes_to_detect)
-                    for r in results_base:
-                        # Visualize results on the frame
-                        frame = r.plot()
-                        for box in r.boxes:
-                            class_id = int(box.cls[0])
-                            # conf = float(box.conf[0]) # No longer used in message
-                            class_name = base_model.names[class_id]
-                            if class_name.lower() == HUMAN_CLASS_NAME.lower():
-                                msg = f"Person detected"
-                                detection_messages.append(msg)
-                            elif class_name.lower() in [c.lower() for c in VEHICLE_CLASS_NAMES]:
-                                msg = f"Vehicle ({class_name}) detected"
-                                detection_messages.append(msg)
+                    instance.stop()
+                    # Give it a moment to stop its internal loop
+                    time.sleep(0.5) 
+                    active_feature_instance[feature_name] = None
+                    print(f"Stopped {feature_name}.")
                 except Exception as e:
-                    log_event_wrapper(f"Error during base model inference: {e}", captured_logs)
+                    print(f"Error stopping {feature_name}: {e}")
 
-        # Run fire model detection
-        if fire_model and FIRE_ID is not None:
-            try:
-                results_fire = fire_model(frame, verbose=False, conf=CONFIDENCE_THRESHOLD_FIRE, classes=[FIRE_ID])
-                for r in results_fire:
-                    frame = r.plot()
-                    if len(r.boxes) > 0: # If any fire detection occurred
-                        # conf = float(r.boxes[0].conf[0]) # No longer used in message
-                        msg = f"🔥🔥🔥 Fire detected 🔥🔥🔥"
-                        detection_messages.append(msg)
-            except Exception as e:
-                log_event_wrapper(f"Error during fire model inference: {e}", captured_logs)
-
-        # Handle alerts if detections occurred and cooldown allows
-        if detection_messages:
-            current_time = time.time()
-            if current_time - last_alert_time > detection_cooldown_seconds:
-                full_alert_message = f"ALERT: {', '.join(detection_messages)}"
-                log_event_wrapper(full_alert_message, captured_logs) # Log the combined alert
-
-                # Trigger voice alert on the device (in a separate thread)
-                if voice_alerts_enabled:
-                    voice_thread = threading.Thread(target=play_voice_alert, args=(full_alert_message, voice_gender))
-                    voice_thread.daemon = True
-                    voice_thread.start()
-                
-                last_alert_time = current_time # Reset cooldown timer
-
-        # Encode the frame to JPEG bytes and yield it
-        ret, buffer = cv2.imencode('.jpg', frame)
-        if not ret:
-            log_event_wrapper("Failed to encode frame to JPEG. Skipping frame.", captured_logs)
-            continue
-        frame_bytes = buffer.tobytes()
-        
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-
-    # Release resources when the streaming loop breaks
-    with cap_lock:
-        if active_cap and active_cap.isOpened():
-            active_cap.release()
-            active_cap = None
-
-    if LOG_FILE_HANDLE:
-        LOG_FILE_HANDLE.write("-" * 60 + "\n")
-        LOG_FILE_HANDLE.write(f"--- Live Detection Stream Ended: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
-        LOG_FILE_HANDLE.close()
-    log_event_wrapper("✅ Live detection stream shut down.", captured_logs)
-
-
-# --- NEW SSE Log Stream Route ---
-@app.route('/log_stream')
-def log_stream():
-    def generate_logs():
-        while True:
-            # Get log messages from the queue. Wait for a short time.
-            # If no message, the loop continues, keeping the connection alive.
-            try:
-                log_message = log_queue.get(timeout=1) # Get with a timeout to avoid blocking indefinitely
-                yield f"data: {log_message}\n\n"
-            except Exception:
-                # No new log message, keep connection alive with a comment or simply continue
-                # yield ": heartbeat\n\n" # Optional: send a heartbeat to prevent timeouts
-                pass # Just continue loop if no new message, connection stays open
-            time.sleep(0.1) # Small delay to prevent busy-waiting
-
-    return Response(generate_logs(), mimetype='text/event-stream')
+def get_placeholder_frame():
+    """Returns a placeholder image when no camera is active or an error occurs."""
+    # Ensure this path is correct relative to app.py
+    placeholder_path = os.path.join(app.root_path, 'static', 'uploads', 'error_placeholder.jpg')
+    try:
+        with open(placeholder_path, 'rb') as f:
+            return b'--frame\r\n' \
+                   b'Content-Type: image/jpeg\r\n\r\n' + f.read() + b'\r\n'
+    except FileNotFoundError:
+        print(f"Error: Placeholder image not found at {placeholder_path}! Please ensure it exists.")
+        # Fallback to a hardcoded black image if placeholder is missing
+        blank_image = np.zeros(shape=[480, 640, 3], dtype=np.uint8)
+        text = "NO IMAGE"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 1
+        font_thickness = 2
+        text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
+        text_x = (blank_image.shape[1] - text_size[0]) // 2
+        text_y = (blank_image.shape[0] + text_size[1]) // 2
+        cv2.putText(blank_image, text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
+        ret, buffer = cv2.imencode('.jpg', blank_image)
+        return b'--frame\r\n' \
+               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n'
 
 
 # --- Flask Routes ---
+
 @app.route('/')
 def index():
-    global current_config
-    current_config = load_config()
-    now_ist = datetime.now()
-    return render_template('index.html', config=current_config, now=now_ist)
+    """Landing page."""
+    stop_all_active_features() # Ensure nothing is running when on landing page
+    return render_template('index.html')
 
-@app.route('/video_feed')
-def video_feed():
-    return Response(generate_frames_with_detection(
-        camera_source=current_config['camera_source'],
-        rotation_angle=current_config['rotation_angle'],
-        ir_mode=current_config['ir_mode']
-    ), mimetype='multipart/x-mixed-replace; boundary=frame')
+@app.route('/features')
+def features():
+    """Features selection page."""
+    stop_all_active_features() # Ensure nothing is running when on features page
+    return render_template('features.html')
 
+@app.route('/dashboard')
+def dashboard():
+    """Your original AI Monitoring Dashboard."""
+    # Ensure other features are stopped and Agnidrishti is initialized/running
+    stop_all_active_features()
+    with feature_locks["agnidrishti"]:
+        if active_feature_instance["agnidrishti"] is None:
+            # Pass the current config to the AgnidrishtiCamera
+            active_feature_instance["agnidrishti"] = AgnidrishtiCamera(config=current_agnidrishti_config)
+            print("AgnidrishtiCamera (Dashboard) started.")
+    return render_template('dashboard.html', config=current_agnidrishti_config, now=datetime.now())
+
+@app.route('/forbidden_zone_ids')
+def forbidden_zone_ids():
+    """New Forbidden Zone IDS feature page."""
+    # Ensure other features are stopped and ForbiddenZoneIDS is initialized/running
+    stop_all_active_features()
+    global current_forbidden_zone_source # Access global variable
+    with feature_locks["forbidden_zone"]:
+        if active_feature_instance["forbidden_zone"] is None:
+            active_feature_instance["forbidden_zone"] = ForbiddenZoneIDS(video_source=current_forbidden_zone_source)
+            print("ForbiddenZoneIDS started.")
+    return render_template('forbidden_zone.html', current_source=current_forbidden_zone_source)
+
+# --- Video Streaming Endpoints ---
+
+@app.route('/video_feed/<feature_name>')
+def video_feed(feature_name):
+    """
+    Video streaming route for either feature.
+    Expected feature_name: 'agnidrishti' or 'forbidden_zone'
+    """
+    if feature_name not in active_feature_instance or active_feature_instance[feature_name] is None:
+        print(f"Video feed requested for inactive or unknown feature: {feature_name}")
+        return Response(get_placeholder_frame(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    
+    # Use the appropriate generator for the feature
+    if feature_name == "agnidrishti":
+        return Response(active_feature_instance[feature_name].gen_frames(),
+                        mimetype='multipart/x-mixed-replace; boundary=frame')
+    elif feature_name == "forbidden_zone":
+        return Response(active_feature_instance[feature_name].generate_frames(),
+                        mimetype='multipart/x-mixed-replace; boundary=frame')
+    else:
+        return Response(get_placeholder_frame(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+# --- Agnidrishti Specific Routes (from original app.py) ---
 @app.route('/configure_stream', methods=['POST'])
 def configure_stream():
-    global current_config
+    global current_agnidrishti_config
 
     new_source = request.form.get('camera_source_input')
     if new_source:
         try:
-            current_config['camera_source'] = int(new_source) if new_source.isdigit() else new_source
+            current_agnidrishti_config['camera_source'] = int(new_source) if new_source.isdigit() else new_source
         except ValueError:
             print(f"Warning: Invalid camera source input '{new_source}'. Keeping current.")
 
     rotation_str = request.form.get('rotation_angle', '0')
     try:
-        current_config['rotation_angle'] = int(rotation_str)
+        current_agnidrishti_config['rotation_angle'] = int(rotation_str)
     except ValueError:
         print(f"Warning: Invalid rotation angle input '{rotation_str}'. Keeping current.")
     
-    current_config['voice_alerts_enabled'] = 'voice_alerts_enabled' in request.form
-    current_config['voice_gender'] = request.form.get('voice_gender', current_config['voice_gender'])
-    current_config['detection_cooldown_seconds'] = int(request.form.get('detection_cooldown_seconds', current_config['detection_cooldown_seconds']))
+    current_agnidrishti_config['voice_alerts_enabled'] = 'voice_alerts_enabled' in request.form
+    current_agnidrishti_config['voice_gender'] = request.form.get('voice_gender', current_agnidrishti_config['voice_gender'])
+    current_agnidrishti_config['detection_cooldown_seconds'] = int(request.form.get('detection_cooldown_seconds', current_agnidrishti_config['detection_cooldown_seconds']))
 
-    save_config(current_config)
-    print(f"Configuration updated: {current_config}")
-    return redirect(url_for('index'))
+    save_agnidrishti_config(current_agnidrishti_config)
+    print(f"Agnidrishti Configuration updated: {current_agnidrishti_config}")
+    
+    # Update the running instance if it exists
+    with feature_locks["agnidrishti"]:
+        if active_feature_instance["agnidrishti"]:
+            active_feature_instance["agnidrishti"].update_config(current_agnidrishti_config)
+
+    return redirect(url_for('dashboard'))
 
 @app.route('/toggle_ir_mode', methods=['POST'])
 def toggle_ir_mode():
-    global current_config
+    global current_agnidrishti_config
 
-    current_config['ir_mode'] = not current_config['ir_mode']
-    save_config(current_config)
-    print(f"IR Mode toggled to: {current_config['ir_mode']}")
-    return jsonify({'success': True, 'new_ir_state': current_config['ir_mode']})
+    current_agnidrishti_config['ir_mode'] = not current_agnidrishti_config['ir_mode']
+    save_agnidrishti_config(current_agnidrishti_config)
+    print(f"Agnidrishti IR Mode toggled to: {current_agnidrishti_config['ir_mode']}")
+    
+    # Update the running instance if it exists
+    with feature_locks["agnidrishti"]:
+        if active_feature_instance["agnidrishti"]:
+            active_feature_instance["agnidrishti"].update_config(current_agnidrishti_config)
+
+    return jsonify({'success': True, 'new_ir_state': current_agnidrishti_config['ir_mode']})
 
 
-# --- Standalone Test / Initial Setup ---
-if __name__ == "__main__":
-    print("--- Running SurakshaNethra (Flask App) ---")
-    print("Ensure yolov8_models and templates/index.html exist.")
-    print("Access the web interface at http://127.0.0.1:5000")
+# --- Forbidden Zone IDS Control Endpoints ---
+@app.route('/set_forbidden_zone_source', methods=['POST'])
+def set_forbidden_zone_source():
+    global current_forbidden_zone_source
+    data = request.get_json()
+    new_source = data.get('source')
+    
+    if new_source is None:
+        return jsonify({"status": "error", "message": "No source provided"}), 400
 
+    print(f"Attempting to change Forbidden Zone IDS source to: {new_source}")
+    current_forbidden_zone_source = new_source
+    
+    # Stop existing instance and restart with new source
+    stop_all_active_features() # This will stop FZIDS if it's running
+    
+    # Re-initialize the FZIDS instance with the new source if it's the active view
+    # This assumes the user will be redirected back to the FZIDS page
+    # A more robust solution might involve re-initializing on the fly in the video_feed generator
+    # but for simplicity, we'll let the next page load handle it.
+    
+    return jsonify({"status": "success", "message": f"Forbidden Zone IDS source set to {new_source}. Please refresh the page or navigate to the Forbidden Zone IDS feature."})
+
+
+@app.route('/fzids_toggle_zone/<zone_name>', methods=['POST'])
+def fzids_toggle_zone(zone_name):
+    with feature_locks["forbidden_zone"]:
+        if active_feature_instance["forbidden_zone"]:
+            is_active = active_feature_instance["forbidden_zone"].toggle_zone_active(zone_name)
+            if is_active is not None:
+                return jsonify({"status": "success", "zone": zone_name, "active": is_active})
+            return jsonify({"status": "error", "message": f"Zone {zone_name} not found"}), 404
+        return jsonify({"status": "error", "message": "Forbidden Zone IDS not running"}), 400
+
+@app.route('/fzids_scale_zone/<zone_name>/<action>', methods=['POST'])
+def fzids_scale_zone(zone_name, action):
+    increase = (action == 'increase')
+    with feature_locks["forbidden_zone"]:
+        if active_feature_instance["forbidden_zone"]:
+            scale_factor = active_feature_instance["forbidden_zone"].scale_zone(zone_name, increase)
+            if scale_factor is not None:
+                return jsonify({"status": "success", "zone": zone_name, "scale_factor": scale_factor})
+            return jsonify({"status": "error", "message": f"Zone {zone_name} not found"}), 404
+        return jsonify({"status": "error", "message": "Forbidden Zone IDS not running"}), 400
+
+@app.route('/fzids_reset_zones', methods=['POST'])
+def fzids_reset_zones():
+    with feature_locks["forbidden_zone"]:
+        if active_feature_instance["forbidden_zone"]:
+            active_feature_instance["forbidden_zone"].reset_zones()
+            return jsonify({"status": "success", "message": "Zones reset to default"})
+        return jsonify({"status": "error", "message": "Forbidden Zone IDS not running"}), 400
+
+
+# --- SocketIO for Real-time Logs and Alerts ---
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected to SocketIO')
+    # Optionally send initial state or welcome message
+    # These initial messages are now handled by the JS on DOMContentLoaded
+    pass
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected from SocketIO')
+
+def log_producer():
+    """Continuously fetches logs from queues and emits them via SocketIO."""
+    while True:
+        try:
+            # Agnidrishti Logs
+            agnidrishti_q = get_agnidrishti_log_queue()
+            while not agnidrishti_q.empty():
+                log_entry = agnidrishti_q.get()
+                socketio.emit('agnidrishti_log', {'log': log_entry})
+            
+            # Forbidden Zone IDS Logs
+            while not intrusion_log_queue.empty():
+                log_entry = intrusion_log_queue.get()
+                socketio.emit('forbidden_zone_log', {'log': log_entry})
+            
+            # Forbidden Zone IDS Alert Status (for pulsing indicator)
+            socketio.emit('forbidden_zone_alert_status', {'active': get_fzids_alert_active()})
+
+            time.sleep(0.1) # Poll more frequently for smoother log updates
+        except Exception as e:
+            print(f"Error in log_producer: {e}")
+            time.sleep(1) # Wait longer on error
+
+# Start the log producer thread
+log_thread = threading.Thread(target=log_producer, daemon=True)
+log_thread.start()
+
+# --- Application Startup ---
+if __name__ == '__main__':
+    # Create necessary directories
     os.makedirs('yolov8_models', exist_ok=True)
     os.makedirs('detection_logs_live', exist_ok=True)
     os.makedirs('templates', exist_ok=True)
     os.makedirs('static', exist_ok=True)
+    os.makedirs('static/uploads', exist_ok=True) # For FZIDS snapshots
+    os.makedirs('model_handlers', exist_ok=True) # Ensure model_handlers exists
 
     # Create dummy model files if they don't exist
-    for model_path in [BASE_YOLO_MODEL_PATH, FIRE_YOLO_MODEL_PATH]:
+    for model_path in [
+        os.path.join('yolov8_models', 'yolov8x.pt'),
+        os.path.join('yolov8_models', 'yolofirenew.pt')
+    ]:
         if not os.path.exists(model_path):
-            os.makedirs(os.path.dirname(model_path), exist_ok=True)
             with open(model_path, 'w') as f:
                 f.write("DUMMY_YOLO_MODEL_FILE_PLACEHOLDER")
             print(f"Created dummy model file: {model_path}. Please replace with your actual YOLOv8 models.")
 
+    # Create initial config file for Agnidrishti if it doesn't exist
     if not os.path.exists(CONFIG_FILE):
-        save_config(DEFAULT_CONFIG)
+        save_agnidrishti_config(DEFAULT_AGNIDRISHTI_CONFIG)
         print(f"Created initial config file: {CONFIG_FILE}")
 
-    app.run(host='0.0.0.0', debug=True)
+    # Create the placeholder image if it doesn't exist
+    placeholder_path = os.path.join(app.root_path, 'static', 'uploads', 'error_placeholder.jpg')
+    if not os.path.exists(placeholder_path):
+        try:
+            # Create a simple black image with text
+            blank_image = np.zeros(shape=[480, 640, 3], dtype=np.uint8)
+            text = "NO FEED / ERROR"
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 1
+            font_thickness = 2
+            text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
+            text_x = (blank_image.shape[1] - text_size[0]) // 2
+            text_y = (blank_image.shape[0] + text_size[1]) // 2
+            cv2.putText(blank_image, text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
+            cv2.imwrite(placeholder_path, blank_image)
+            print(f"Created placeholder image: {placeholder_path}")
+        except Exception as e:
+            print(f"Could not create placeholder image: {e}")
+
+    # Run Flask-SocketIO app
+    print("Starting Flask application...")
+    socketio.run(app, debug=True, allow_unsafe_werkzeug=True)
