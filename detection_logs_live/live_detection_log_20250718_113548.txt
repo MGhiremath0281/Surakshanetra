@@ -1,0 +1,11 @@
+--- Live Detection Log Started: 2025-07-18 11:35:48 ---
+Camera Source: C:\Users\adity\Desktop\SurakshaNethra\data\firedata2.mp4
+Rotation Angle: 0
+IR Mode: False
+Base Model: yolov8x.pt
+Fire Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-18 11:35:48.567] ✅ Base model loaded successfully.
+[2025-07-18 11:35:48.666] ✅ Fire model loaded successfully.
+[2025-07-18 11:35:48.701] Camera/video source 'C:\Users\adity\Desktop\SurakshaNethra\data\firedata2.mp4' opened successfully.
+[2025-07-18 11:35:48.720] Starting Agnidrishti live detection stream for source: C:\Users\adity\Desktop\SurakshaNethra\data\firedata2.mp4 with rotation=0 and IR_Mode=False

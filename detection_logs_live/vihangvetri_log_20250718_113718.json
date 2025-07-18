@@ -1,0 +1,23 @@
+[
+  {
+    "timestamp": "2025-07-18T11:37:25.663583",
+    "object_class": "drone",
+    "confidence": "0.81",
+    "zone": {
+      "x": 480,
+      "y": 270,
+      "width": 960,
+      "height": 540
+    },
+    "drone_coords": {
+      "x1": 515,
+      "y1": 300,
+      "x2": 1278,
+      "y2": 577,
+      "cx": 897,
+      "cy": 438
+    },
+    "full_snapshot_file": "vihangvetri_snapshot_20250718_113718.jpg",
+    "drone_crop_file": "vihangvetri_drone_crop_20250718_113718.jpg"
+  }
+]
