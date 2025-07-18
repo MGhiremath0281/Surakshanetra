@@ -1,0 +1,10 @@
+--- Live Detection Log Started: 2025-07-18 03:23:07 ---
+Camera Source: C:\Users\adity\Desktop\SurakshaNethra\data\firedata2.mp4
+Rotation Angle: 0
+IR Mode: False
+Base Model: yolov8x.pt
+Fire Model: yolofirenew.pt
+------------------------------------------------------------
+[2025-07-18 03:23:07.721] ✅ Base model loaded successfully.
+[2025-07-18 03:23:07.809] ✅ Fire model loaded successfully.
+[2025-07-18 03:23:07.842] Camera/video source 'C:\Users\adity\Desktop\SurakshaNethra\data\firedata2.mp4' opened successfully.
